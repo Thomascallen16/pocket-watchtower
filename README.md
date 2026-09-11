@@ -73,11 +73,21 @@ The owner can create a local device baseline and later see observable changes su
 
 Each event records a timestamp, before/after state when available, source/API, status, and a plain-English explanation.
 
+### Event Intelligence
+
+Version 0.6 adds a human-readable intelligence layer around recorded changes:
+
+- Activity bursts group closely timed observations so a long event stream can be understood at a glance.
+- Events receive a conservative **Routine observation** or **Notable change** assessment based on observable magnitude, not suspected intent.
+- Confidence describes the certainty of the observation itself, not the cause.
+- Closely timed events may be identified as correlated in time, while explicitly stating that correlation is not causation.
+- Every event can be tapped for **What it is / What it means / Why it matters / What it does not mean / Android visibility**.
+
 ### Local Audit History
 
 Pocket Watchtower maintains a local chronological record of observable events. Existing tamper-evident/hash-chain work remains part of the project and should be strengthened rather than discarded.
 
-Exports should include JSON and a human-readable report, with later support for plan/PDF output.
+Exports include JSON-backed event history through the app's share flow and a human-readable report with snapshot SHA-256 and evidence-chain verification.
 
 ## Security and privacy principles
 
@@ -109,4 +119,4 @@ See [`POCKET_WATCHTOWER_BUILD_SPEC.md`](./POCKET_WATCHTOWER_BUILD_SPEC.md) for t
 
 ## Status
 
-The repository is the canonical home for Pocket Watchtower. Existing work is preserved; the project is being expanded from an event recorder into the full device observatory described above.
+**v0.6.0 — Event Intelligence** is the active development line. The repository remains the canonical home for Pocket Watchtower and continues expanding the event recorder into the full local device observatory described above.
