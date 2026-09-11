@@ -1,5 +1,6 @@
 package com.thomascallen.pocketwatchtower
 
+import android.app.ActivityManager
 import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
@@ -11,9 +12,11 @@ import java.io.File
 /**
  * Owner-controlled remediation helpers.
  *
- * The key rule is that Watchtower never silently destroys data or secretly
- * terminates another app. Android remains the authority for privileged
- * operations, and the owner gets an explicit system UI when required.
+ * Watchtower never silently destroys data or pretends that Android granted it
+ * more authority than it actually has. Where Android permits background
+ * process termination, Watchtower exposes that as an explicit owner action.
+ * Full force-stop remains Android system UI unless Watchtower has a management
+ * role that legitimately permits stronger controls.
  */
 internal data class OwnerActionResult(
     val title: String,
@@ -23,11 +26,34 @@ internal data class OwnerActionResult(
 
 internal class OwnerActions(private val context: Context) {
     private val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
 
     fun appDetailsIntent(packageName: String): Intent = Intent(
         Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
         Uri.parse("package:$packageName")
     )
+
+    fun endBackgroundProcesses(packageName: String): OwnerActionResult = runCatching {
+        if (packageName == context.packageName) {
+            return OwnerActionResult(
+                "Watchtower cannot end itself",
+                "Use Android's Force stop control for Watchtower itself. This action is reserved so the observatory cannot accidentally terminate its own evidence UI mid-operation.",
+                false
+            )
+        }
+        activityManager.killBackgroundProcesses(packageName)
+        OwnerActionResult(
+            "Background process stop requested",
+            "Android accepted Watchtower's request to stop background processes for $packageName. This is not the same as a guaranteed full force-stop; Android may restart components according to its lifecycle rules.",
+            true
+        )
+    }.getOrElse {
+        OwnerActionResult(
+            "Process stop unavailable",
+            "Android rejected the background-process stop request: ${it.message ?: "unknown error"}",
+            false
+        )
+    }
 
     fun forceStopGuidance(packageName: String): OwnerActionResult = OwnerActionResult(
         "Force-stop control",
@@ -103,7 +129,7 @@ internal class OwnerActions(private val context: Context) {
     fun actionPolicyText(): String = if (dpm.isDeviceOwnerApp(context.packageName)) {
         "DEVICE OWNER: Watchtower may use Android device-policy controls such as package suspension. Every destructive action remains owner-visible."
     } else {
-        "STANDARD APP: Watchtower can inspect exposed state and hand privileged actions to Android system UI. Direct silent force-stop/uninstall of other apps is not assumed."
+        "STANDARD APP: Watchtower can end background processes where Android permits it, and can hand full force-stop/uninstall actions to Android system UI."
     }
 }
 
