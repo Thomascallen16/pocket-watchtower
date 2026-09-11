@@ -40,7 +40,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private const val VERSION = "0.7.0"
+private const val VERSION = "0.8.0"
 
 internal data class Event(val time: String, val key: String, val category: String, val previous: String?, val current: String, val hash: String)
 
@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
     private var items by mutableStateOf(listOf<ObservatoryItem>()); private var events by mutableStateOf(listOf<Event>()); private var status by mutableStateOf("Starting device scan…"); private var integrity by mutableStateOf("Not verified"); private var snapshotHash by mutableStateOf("-"); private var selectedSection by mutableStateOf("All"); private var selectedEvent by mutableStateOf<Event?>(null); private var selectedCurrent by mutableStateOf<ObservatoryItem?>(null)
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); store = WatchStore(this); observatory = DeviceObservatory(this); setContent { App() }; scan() }
     override fun onResume() { super.onResume(); if (::store.isInitialized) scan() }
-    private fun scan() { val collected = observatory.collect(); if (store.snapshot().isEmpty()) { store.establish(collected); status = "Baseline established" } else { val changes = store.scan(collected); status = if (changes.isEmpty()) "No observable changes" else "${changes.size} observable change(s) detected" }; items = collected; events = store.events(); integrity = if (store.verify()) "VERIFIED" else "INTEGRITY FAILURE"; snapshotHash = store.snapshotHash() }
+    private fun scan() { val collected = observatory.collect() + ProcessVisibility(this).collect(); if (store.snapshot().isEmpty()) { store.establish(collected); status = "Baseline established" } else { val changes = store.scan(collected); status = if (changes.isEmpty()) "No observable changes" else "${changes.size} observable change(s) detected" }; items = collected; events = store.events(); integrity = if (store.verify()) "VERIFIED" else "INTEGRITY FAILURE"; snapshotHash = store.snapshotHash() }
 
     @Composable private fun App() {
         MaterialTheme {
