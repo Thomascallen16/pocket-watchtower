@@ -40,7 +40,7 @@ import java.util.Locale
 
 private const val VERSION = "0.6.0"
 
-private data class Event(
+internal data class Event(
     val time: String,
     val key: String,
     val category: String,
@@ -110,19 +110,24 @@ private class WatchStore(context: Context) {
     )
 
     fun exportReport(): String = buildString {
+        val history = events()
         appendLine("POCKET WATCHTOWER v$VERSION")
         appendLine("Local-first Android device observatory")
         appendLine("Generated: ${formatter.format(Date())}")
         appendLine("Integrity: ${if (verify()) "VERIFIED" else "INTEGRITY FAILURE"}")
+        appendLine("Evidence chain: ${if (verify()) "VERIFIED" else "BROKEN"}")
         appendLine("Snapshot SHA-256: ${snapshotHash()}")
-        appendLine("Events: ${events().size}")
+        appendLine("Events: ${history.size}")
         appendLine()
-        if (events().isEmpty()) appendLine("No changes recorded.")
-        events().forEach {
+        if (history.isEmpty()) appendLine("No changes recorded.")
+        var previousHash = "GENESIS"
+        history.forEach {
             appendLine("${it.time} | ${it.category}/${it.key}")
             appendLine("  Previous: ${it.previous ?: "(none)"}")
             appendLine("  Current: ${it.current}")
-            appendLine("  Hash: ${it.hash}")
+            appendLine("  Previous event hash: $previousHash")
+            appendLine("  Event hash: ${it.hash}")
+            previousHash = it.hash
             appendLine()
         }
         appendLine("Evidence rule: an observation is not an accusation.")
@@ -216,6 +221,7 @@ class MainActivity : ComponentActivity() {
                 val visibleItems = if (selectedSection == "All") items else items.filter { it.section == selectedSection }
                 val observedCount = items.count { it.status == "OBSERVED" || it.status == "KNOWN" }
                 val restrictedCount = items.count { it.status.contains("RESTRICTED") || it.status.contains("REQUIRES") }
+                val bursts = activityBursts(events)
 
                 LazyColumn(
                     Modifier.fillMaxSize().padding(padding).padding(16.dp),
@@ -268,6 +274,25 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    if (bursts.isNotEmpty()) {
+                        item {
+                            Text("Activity bursts", style = MaterialTheme.typography.titleLarge)
+                        }
+                        items(bursts) { burst ->
+                            Card(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("${burst.events.size} observations • ${burst.start}", style = MaterialTheme.typography.titleMedium)
+                                    Text(if (burst.start == burst.end) "Single observation" else "${burst.start} → ${burst.end}")
+                                    Text(
+                                        burst.events.take(4).joinToString(" • ") { "${it.category}/${it.key}" } +
+                                            if (burst.events.size > 4) " • +${burst.events.size - 4} more" else ""
+                                    )
+                                    Text("A burst groups closely timed observations. Grouping shows timing, not causation.", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+
                     item { Text(if (selectedSection == "All") "Current device" else selectedSection, style = MaterialTheme.typography.titleLarge) }
                     items(visibleItems) { item ->
                         Card(Modifier.fillMaxWidth()) {
@@ -287,6 +312,7 @@ class MainActivity : ComponentActivity() {
                     }
                     if (events.isEmpty()) item { Text("No changes recorded.") }
                     items(events.reversed()) { event ->
+                        val assessment = assessEvent(event, events)
                         Card(
                             Modifier
                                 .fillMaxWidth()
@@ -298,6 +324,7 @@ class MainActivity : ComponentActivity() {
                                     Text("ABOUT", style = MaterialTheme.typography.labelMedium)
                                 }
                                 Text("${event.previous ?: "(none)"} → ${event.current}")
+                                Text("${assessment.level} • Confidence: ${assessment.confidence}", style = MaterialTheme.typography.bodySmall)
                                 Text("SHA-256 ${event.hash.take(24)}…", style = MaterialTheme.typography.bodySmall)
                             }
                         }
@@ -315,6 +342,7 @@ class MainActivity : ComponentActivity() {
 
             selectedEvent?.let { event ->
                 val explanation = explainEvent(event)
+                val assessment = assessEvent(event, events)
                 AlertDialog(
                     onDismissRequest = { selectedEvent = null },
                     title = { Text(explanation.title) },
@@ -328,6 +356,9 @@ class MainActivity : ComponentActivity() {
                             Text(explanation.whyItMatters)
                             Text("WHAT IT DOES NOT MEAN", style = MaterialTheme.typography.labelLarge)
                             Text(explanation.doesNotMean)
+                            Text("EVENT ASSESSMENT", style = MaterialTheme.typography.labelLarge)
+                            Text("${assessment.level}. ${assessment.confidence}")
+                            Text(assessment.detail)
                             Text("ANDROID VISIBILITY", style = MaterialTheme.typography.labelLarge)
                             Text(explanation.visibility)
                             Text(
