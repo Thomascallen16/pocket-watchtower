@@ -12,31 +12,23 @@ android {
         applicationId = "com.thomascallen.pocketwatchtower"
         minSdk = 26
         targetSdk = 36
-        versionCode = 60
-        versionName = "0.6.0"
+        versionCode = 70
+        versionName = "0.7.0"
     }
 
-    buildFeatures {
-        compose = true
-    }
+    buildFeatures { compose = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    kotlinOptions { jvmTarget = "17" }
 
-    packaging {
-        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
-    }
+    packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 
     buildTypes {
         getByName("release") {
-            // Device-installable release variant for local testing.
-            // Replace with a dedicated private release keystore before public distribution.
             signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
         }
@@ -47,7 +39,6 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2025.08.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)
-
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.3")
