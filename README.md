@@ -73,15 +73,24 @@ The owner can create a local device baseline and later see observable changes su
 
 Each event records a timestamp, before/after state when available, source/API, status, and a plain-English explanation.
 
-### Event Intelligence
+### Event Intelligence — v1.1
 
-Version 0.6 adds a human-readable intelligence layer around recorded changes:
+The event intelligence layer now treats correlation as a review aid rather than a conclusion:
 
-- Activity bursts group closely timed observations so a long event stream can be understood at a glance.
-- Events receive a conservative **Routine observation** or **Notable change** assessment based on observable magnitude, not suspected intent.
-- Confidence describes the certainty of the observation itself, not the cause.
-- Closely timed events may be identified as correlated in time, while explicitly stating that correlation is not causation.
-- Every event can be tapped for **What it is / What it means / Why it matters / What it does not mean / Android visibility**.
+- **Temporal correlation windows** group closely timed observations.
+- **Signal families** distinguish battery/power, memory/resources, network/connectivity, application state, process visibility, accessibility/special access, and security/administration.
+- **Human-readable explanations** tell the owner what happened, why it matters, ordinary possible reasons, what would strengthen the signal, and what it does not prove.
+- **Evidence drill-down** connects every correlation back to its exact timestamped observations and original event records.
+- **Current Device explanation parity** applies the same plain-English explanation model to live device cards.
+- **Zero correlation remains valid.** No qualifying correlation is not proof that nothing happened or that a device is uncompromised.
+
+### Owner-Controlled Root Observatory
+
+Root is not an Android runtime permission. Pocket Watchtower therefore does not silently grant itself privileged access.
+
+The v1.1 root layer requires explicit owner consent before attempting a minimal, non-invasive identity probe through the device's normal root authorization mechanism. It records consent/revocation locally and distinguishes root availability from the meaning of any device event.
+
+It does **not** exploit vulnerabilities, bypass authorization, persist hidden privileged access, or modify the device as part of the probe.
 
 ### Local Audit History
 
@@ -97,8 +106,9 @@ Exports include JSON-backed event history through the app's share flow and a hum
 - No sale of device data.
 - No silent collection.
 - No hidden backend required for core functionality.
-- Official Android APIs only.
+- Official Android APIs for ordinary observation.
 - No sandbox bypasses, exploits, covert surveillance, or secret privilege escalation.
+- Privileged observation requires explicit owner consent and the device's normal root authorization mechanism.
 - Settings changes should use Android's own security UI rather than bypassing it.
 
 ## Important limits
@@ -119,4 +129,4 @@ See [`POCKET_WATCHTOWER_BUILD_SPEC.md`](./POCKET_WATCHTOWER_BUILD_SPEC.md) for t
 
 ## Status
 
-**v0.6.0 — Event Intelligence** is the active development line. The repository remains the canonical home for Pocket Watchtower and continues expanding the event recorder into the full local device observatory described above.
+**v1.1 development line — Correlation + Owner-Controlled Root Observatory.** The v1.0.0 Owner Forensic Observatory remains the release baseline. The v1.1 branch adds the correlation architecture and explicit root-consent foundation without weakening the evidence boundaries.
