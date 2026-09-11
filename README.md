@@ -10,9 +10,9 @@ Pocket Watchtower does **not** claim to identify who caused a device change mere
 
 ## Current release
 
-**v1.1.0 — Integrity Observatory baseline**
+**v1.1.1 — Cyber Observatory + Owner Actions refinement**
 
-The repository now treats version `1.1.0` as the canonical release line. Android build artifacts are generated from the Gradle `versionName` rather than a second hard-coded CI version. Release validation also uses a shell-safe build-time alignment step so the CI workflow cannot fail while rewriting the in-app release label.
+The v1.1.1 build keeps the evidence-first observatory model while adding a restrained cyber-forensic visual treatment, clearer Owner Actions boundaries, and a corrected Android release workflow that builds from `main` and derives the APK artifact name from Gradle `versionName`.
 
 ## What it does
 
@@ -83,7 +83,7 @@ Pocket Watchtower maintains a local chronological evidence history. The chain ca
 
 ### Owner Actions
 
-Remediation remains owner-controlled and Android-mediated. The separate Owner Actions screen can open Android application controls, provide uninstall guidance, handle device-owner-only suspension where available, and let the owner select exact documents through Android's document provider before deletion.
+Remediation remains owner-controlled and Android-mediated. Watchtower distinguishes its own limited background-process controls from Android's stronger system Force Stop controls and clearly reports when Android restricts an action.
 
 ## Security and privacy principles
 
@@ -109,7 +109,7 @@ It must never represent an unexplained event as proof of law-enforcement activit
 
 ## Build
 
-The implementation is native Android using Kotlin, Jetpack Compose and AndroidX. The release workflow builds the release APK with JDK 17 and derives its artifact name from the application's Gradle version.
+The implementation is native Android using Kotlin, Jetpack Compose and AndroidX. The release workflow builds the release APK with JDK 17 from `main`, derives its artifact name from the application's Gradle version, and supports manual dispatch.
 
 The canonical product specification is [`POCKET_WATCHTOWER_BUILD_SPEC.md`](./POCKET_WATCHTOWER_BUILD_SPEC.md).
 
