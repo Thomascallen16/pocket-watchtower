@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -117,14 +118,16 @@ private fun SignalStat(label: String, value: String, modifier: Modifier = Modifi
 
 @Composable
 private fun VisibilityRing(fraction: Float, modifier: Modifier = Modifier) {
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant
+    val progressColor = MaterialTheme.colorScheme.primary
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val stroke = 12.dp.toPx()
             val diameter = min(size.width, size.height) - stroke
             val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
             val arcSize = Size(diameter, diameter)
-            drawArc(MaterialTheme.colorScheme.surfaceVariant, -90f, 360f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-            drawArc(MaterialTheme.colorScheme.primary, -90f, 360f * fraction.coerceIn(0f, 1f), false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+            drawArc(trackColor, -90f, 360f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+            drawArc(progressColor, -90f, 360f * fraction.coerceIn(0f, 1f), false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("${(fraction * 100).toInt()}%", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -157,10 +160,15 @@ private fun FlowNode(label: String, number: String) {
 }
 
 @Composable
-private fun FlowLine() { Box(Modifier.height(2.dp).weight(1f).padding(horizontal = 3.dp).background(MaterialTheme.colorScheme.outlineVariant)) }
+private fun RowScope.FlowLine() {
+    val lineColor = MaterialTheme.colorScheme.outlineVariant
+    Box(Modifier.weight(1f).height(2.dp).padding(horizontal = 3.dp).background(lineColor))
+}
 
 @Composable
 private fun EvidencePulse(events: List<Event>, modifier: Modifier = Modifier) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val outlineColor = MaterialTheme.colorScheme.outlineVariant
     Canvas(modifier) {
         if (events.isEmpty()) return@Canvas
         val maxHeight = size.height * 0.78f; val baseline = size.height * 0.86f
@@ -169,8 +177,8 @@ private fun EvidencePulse(events: List<Event>, modifier: Modifier = Modifier) {
             val magnitude = 0.35f + ((event.key.length + event.category.length) % 6) / 10f
             Offset(index * step, baseline - maxHeight * magnitude.coerceAtMost(0.9f))
         }
-        for (i in 0 until points.lastIndex) drawLine(MaterialTheme.colorScheme.primary, points[i], points[i + 1], 4.dp.toPx(), cap = StrokeCap.Round)
-        points.forEach { drawCircle(MaterialTheme.colorScheme.primary, 5.dp.toPx(), it) }
-        drawLine(MaterialTheme.colorScheme.outlineVariant, Offset(0f, baseline), Offset(size.width, baseline), 2.dp.toPx())
+        for (i in 0 until points.lastIndex) drawLine(primaryColor, points[i], points[i + 1], 4.dp.toPx(), cap = StrokeCap.Round)
+        points.forEach { drawCircle(primaryColor, 5.dp.toPx(), it) }
+        drawLine(outlineColor, Offset(0f, baseline), Offset(size.width, baseline), 2.dp.toPx())
     }
 }
