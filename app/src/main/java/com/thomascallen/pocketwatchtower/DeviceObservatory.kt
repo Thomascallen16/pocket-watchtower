@@ -12,7 +12,9 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
+import android.os.SystemClock
 import android.provider.Settings
+import java.util.concurrent.TimeUnit
 
 internal data class ObservatoryItem(val section: String, val name: String, val value: String, val status: String = "OBSERVED")
 
@@ -25,6 +27,7 @@ internal class DeviceObservatory(private val context: Context) {
         add(ObservatoryItem("Security", "Security patch", Build.VERSION.SECURITY_PATCH.ifBlank { "Not exposed" }))
         add(ObservatoryItem("Device", "Architecture", Build.SUPPORTED_ABIS.joinToString()))
         add(ObservatoryItem("Device", "Build fingerprint", Build.FINGERPRINT, "KNOWN"))
+        addAll(systemState())
         addAll(memory())
         addAll(storage())
         addAll(battery())
@@ -32,6 +35,21 @@ internal class DeviceObservatory(private val context: Context) {
         addAll(sensors())
         addAll(access())
         addAll(apps())
+    }
+
+    private fun systemState(): List<ObservatoryItem> {
+        val uptime = TimeUnit.MILLISECONDS.toMinutes(SystemClock.elapsedRealtime())
+        val developerOptions = Settings.Global.getInt(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
+        val adb = Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0) == 1
+        val mockLocation = runCatching {
+            Settings.Secure.getString(context.contentResolver, Settings.Secure.ALLOW_MOCK_LOCATION) == "1"
+        }.getOrDefault(false)
+        return listOf(
+            ObservatoryItem("System", "Uptime", "$uptime minutes"),
+            ObservatoryItem("Security", "Developer options enabled", developerOptions.toString(), "OBSERVED"),
+            ObservatoryItem("Security", "USB debugging / ADB enabled", adb.toString(), "OBSERVED"),
+            ObservatoryItem("Security", "Mock-location setting", mockLocation.toString(), "OBSERVED")
+        )
     }
 
     private fun memory(): List<ObservatoryItem> {
@@ -66,8 +84,11 @@ internal class DeviceObservatory(private val context: Context) {
 
     private fun network(): List<ObservatoryItem> {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val caps = cm.activeNetwork?.let(cm::getNetworkCapabilities)
+        val network = cm.activeNetwork
+        val caps = network?.let(cm::getNetworkCapabilities)
         val vpn = caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+        val validated = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+        val metered = cm.isActiveNetworkMetered
         val transport = when {
             vpn -> "VPN"
             caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true -> "Wi-Fi"
@@ -77,7 +98,9 @@ internal class DeviceObservatory(private val context: Context) {
         }
         return listOf(
             ObservatoryItem("Network", "Active transport", transport),
-            ObservatoryItem("Network", "VPN transport", vpn.toString())
+            ObservatoryItem("Network", "VPN transport", vpn.toString()),
+            ObservatoryItem("Network", "Internet validated", validated.toString()),
+            ObservatoryItem("Network", "Active network metered", metered.toString())
         )
     }
 
@@ -116,12 +139,22 @@ internal class DeviceObservatory(private val context: Context) {
         val packages = pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
         val userApps = packages.filter { (it.applicationInfo?.flags ?: 0) and android.content.pm.ApplicationInfo.FLAG_SYSTEM == 0 }
         val privileged = userApps.count { pkg ->
-            pkg.requestedPermissions?.any { it.contains("ACCESS_FINE_LOCATION") || it.contains("CAMERA") || it.contains("RECORD_AUDIO") } == true
+            pkg.requestedPermissions?.any {
+                it == android.Manifest.permission.ACCESS_FINE_LOCATION ||
+                    it == android.Manifest.permission.ACCESS_COARSE_LOCATION ||
+                    it == android.Manifest.permission.CAMERA ||
+                    it == android.Manifest.permission.RECORD_AUDIO
+            } == true
+        }
+        val updatedRecently = userApps.count { pkg ->
+            val timestamp = pkg.lastUpdateTime
+            System.currentTimeMillis() - timestamp < TimeUnit.DAYS.toMillis(7)
         }
         return listOf(
             ObservatoryItem("Apps", "Visible installed packages", packages.size.toString()),
             ObservatoryItem("Apps", "Visible non-system apps", userApps.size.toString()),
             ObservatoryItem("Apps", "Visible apps requesting location/camera/microphone", privileged.toString()),
+            ObservatoryItem("Apps", "Visible non-system apps updated in last 7 days", updatedRecently.toString()),
             ObservatoryItem("Visibility", "App inventory", "Android may restrict package visibility; this is not a guaranteed complete inventory.", "RESTRICTED BY ANDROID")
         )
     }
