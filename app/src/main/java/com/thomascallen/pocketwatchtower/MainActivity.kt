@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -347,7 +349,10 @@ class MainActivity : ComponentActivity() {
                     onDismissRequest = { selectedEvent = null },
                     title = { Text(explanation.title) },
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
                             Text("WHAT IT IS", style = MaterialTheme.typography.labelLarge)
                             Text(explanation.whatItIs)
                             Text("WHAT IT MEANS", style = MaterialTheme.typography.labelLarge)
