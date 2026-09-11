@@ -1,6 +1,5 @@
 package com.thomascallen.pocketwatchtower
 
-import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Bundle
@@ -100,7 +99,8 @@ class OwnerActionsActivity : ComponentActivity() {
                             Text(target.packageName, style = MaterialTheme.typography.bodySmall)
                             Text(if (target.system) "SYSTEM APP" else "USER / INSTALLED APP", style = MaterialTheme.typography.labelSmall)
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                OutlinedButton(onClick = { openDetails(target.packageName) }) { Text("Review / Stop") }
+                                OutlinedButton(onClick = { result = actions.endBackgroundProcesses(target.packageName) }) { Text("End background") }
+                                OutlinedButton(onClick = { openDetails(target.packageName) }) { Text("Force stop…") }
                                 OutlinedButton(onClick = { result = actions.uninstallGuidance(target.packageName); openDetails(target.packageName) }) { Text("Uninstall") }
                                 OutlinedButton(onClick = { result = actions.suspendIfDeviceOwner(target.packageName) }) { Text("Suspend") }
                             }
