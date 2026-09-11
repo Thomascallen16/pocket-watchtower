@@ -8,6 +8,12 @@ Pocket Watchtower is a local-first Android device observatory and integrity reco
 
 Pocket Watchtower does **not** claim to identify who caused a device change merely because a change was observed.
 
+## Current release
+
+**v1.1.0 — Integrity Observatory baseline**
+
+The repository now treats version `1.1.0` as the canonical release line. Android build artifacts are generated from the Gradle `versionName` rather than a second hard-coded CI version.
+
 ## What it does
 
 Pocket Watchtower is the owner's device observatory. It answers:
@@ -21,11 +27,11 @@ Pocket Watchtower is the owner's device observatory. It answers:
 - What can Pocket Watchtower actually see?
 - What can Android restrict or hide?
 
-The interface should be understandable in seconds, with deeper technical detail available when wanted.
+The interface is designed for progressive disclosure: a calm owner-readable summary first, with evidence and technical detail available when wanted.
 
 ## Truth-status model
 
-Every observation is explicitly classified. Pocket Watchtower must use statuses such as:
+Every observation is explicitly classified. Pocket Watchtower uses statuses such as:
 
 - **KNOWN**
 - **OBSERVED**
@@ -46,15 +52,11 @@ CPU, memory, storage, battery, display, sensors, operating system, network state
 
 ### Application Observatory
 
-Installed applications to the extent Android permits, including versions, system/user classification, permissions, and relevant special access.
+Installed applications to the extent Android permits, including system/user classification and observable permission/access information. Android package-visibility restrictions remain explicit.
 
 ### Authority Map
 
 Device administrator, device owner, accessibility services, VPN, notification access, usage access, overlay access, and other elevated capabilities exposed by Android.
-
-### Permission Center
-
-A plain-English view of sensitive permissions and which applications currently hold them, with Android Settings paths where appropriate.
 
 ### Visibility Map
 
@@ -69,25 +71,19 @@ This prevents the app from pretending it can see information Android does not ex
 
 ### Baseline & Change Detection
 
-The owner can create a local device baseline and later see observable changes such as application installs/removals/updates, permission changes, accessibility changes, administrator/owner changes, VPN changes, special-access changes, security configuration changes, developer/debug changes, and system updates where exposed.
-
-Each event records a timestamp, before/after state when available, source/API, status, and a plain-English explanation.
+The owner can establish a local baseline and later see observable changes in the device state. Changes are recorded with timestamp, before/after state where available, category and a tamper-evident hash chain.
 
 ### Event Intelligence
 
-Version 0.6 adds a human-readable intelligence layer around recorded changes:
-
-- Activity bursts group closely timed observations so a long event stream can be understood at a glance.
-- Events receive a conservative **Routine observation** or **Notable change** assessment based on observable magnitude, not suspected intent.
-- Confidence describes the certainty of the observation itself, not the cause.
-- Closely timed events may be identified as correlated in time, while explicitly stating that correlation is not causation.
-- Every event can be tapped for **What it is / What it means / Why it matters / What it does not mean / Android visibility**.
+Recorded changes can be grouped into activity bursts and conservative correlation signals. The intelligence layer explains why an observation may matter without turning timing or correlation into a claim of causation.
 
 ### Local Audit History
 
-Pocket Watchtower maintains a local chronological record of observable events. Existing tamper-evident/hash-chain work remains part of the project and should be strengthened rather than discarded.
+Pocket Watchtower maintains a local chronological evidence history. The chain can be verified and the current observable snapshot receives a SHA-256 digest. Human-readable reports can be shared without requiring a cloud account.
 
-Exports include JSON-backed event history through the app's share flow and a human-readable report with snapshot SHA-256 and evidence-chain verification.
+### Owner Actions
+
+Remediation remains owner-controlled and Android-mediated. The separate Owner Actions screen can open Android application controls, provide uninstall guidance, handle device-owner-only suspension where available, and let the owner select exact documents through Android's document provider before deletion.
 
 ## Security and privacy principles
 
@@ -111,12 +107,14 @@ If Android does not expose something, Pocket Watchtower must say so plainly:
 
 It must never represent an unexplained event as proof of law-enforcement activity, spying, compromise, or any other accusation.
 
-## Build direction
+## Build
 
-The implementation is native Android using Kotlin, Jetpack Compose and modern Android architecture. Device collectors are isolated from the UI and must fail gracefully when information is unavailable or restricted.
+The implementation is native Android using Kotlin, Jetpack Compose and AndroidX. The release workflow builds the release APK with JDK 17 and derives its artifact name from the application's Gradle version.
 
-See [`POCKET_WATCHTOWER_BUILD_SPEC.md`](./POCKET_WATCHTOWER_BUILD_SPEC.md) for the complete product and engineering specification.
+The canonical product specification is [`POCKET_WATCHTOWER_BUILD_SPEC.md`](./POCKET_WATCHTOWER_BUILD_SPEC.md).
 
-## Status
+## Completion standard
 
-**v0.6.0 — Event Intelligence** is the active development line. The repository remains the canonical home for Pocket Watchtower and continues expanding the event recorder into the full local device observatory described above.
+Pocket Watchtower is considered complete when a real Android owner can install it, understand observable device state, inspect access and visibility boundaries, establish a baseline, return later, identify observable changes, verify the local evidence chain, export a human-readable record, and understand exactly where Android prevents the app from knowing more.
+
+**The product's credibility comes from the boundaries it refuses to cross.**
