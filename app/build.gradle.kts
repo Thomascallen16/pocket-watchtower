@@ -12,8 +12,8 @@ android {
         applicationId = "com.thomascallen.pocketwatchtower"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 5
+        versionName = "0.5.0"
     }
 
     buildFeatures {
@@ -44,7 +44,6 @@ android {
 }
 
 dependencies {
-    // Compose 1.9.x is compatible with this project's compileSdk 36 / AGP 8.13 stack.
     val composeBom = platform("androidx.compose:compose-bom:2025.08.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)
