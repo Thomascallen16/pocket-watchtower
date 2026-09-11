@@ -17,6 +17,15 @@ internal data class ActivityBurst(
     val end: String
 )
 
+internal data class CurrentExplanation(
+    val title: String,
+    val whatItIs: String,
+    val whatItMeans: String,
+    val whyItMatters: String,
+    val doesNotMean: String,
+    val visibility: String
+)
+
 internal fun assessEvent(event: Event, nearby: List<Event>): EventAssessment {
     val current = numeric(event.current)
     val previous = numeric(event.previous)
@@ -33,11 +42,7 @@ internal fun assessEvent(event: Event, nearby: List<Event>): EventAssessment {
     } else {
         "No closely timed companion observation was recorded for this event."
     }
-    return EventAssessment(
-        level = level,
-        confidence = "High — the change itself was directly observed and hash-recorded.",
-        detail = correlation
-    )
+    return EventAssessment(level, "High — the change itself was directly observed and hash-recorded.", correlation)
 }
 
 internal fun activityBursts(events: List<Event>): List<ActivityBurst> {
@@ -46,15 +51,20 @@ internal fun activityBursts(events: List<Event>): List<ActivityBurst> {
     val bursts = mutableListOf<MutableList<Event>>()
     for (event in chronological) {
         val current = bursts.lastOrNull()
-        if (current == null || timeMillis(event) - timeMillis(current.last()) > 5_000L) {
-            bursts += mutableListOf(event)
-        } else {
-            current += event
-        }
+        if (current == null || timeMillis(event) - timeMillis(current.last()) > 5_000L) bursts += mutableListOf(event) else current += event
     }
-    return bursts.map { group ->
-        ActivityBurst(group, group.first().time, group.last().time)
-    }.reversed()
+    return bursts.map { group -> ActivityBurst(group, group.first().time, group.last().time) }.reversed()
+}
+
+internal fun explainCurrentItem(item: ObservatoryItem): CurrentExplanation {
+    val title = "${item.section} • ${item.name}"
+    val normalized = item.name.lowercase()
+    return when {
+        normalized.contains("ram") || normalized.contains("memory") -> CurrentExplanation(title, "Available RAM is the amount of system memory Android currently reports as available for apps and system work.", "It naturally moves up and down as apps start, stop, cache data, or Android reclaims memory.", "Watching it over time can reveal changes in device workload and establish a normal baseline.", "A RAM change does not identify an app, person, attack, or cause by itself.", "Android exposes an estimate of memory availability; Watchtower cannot see every internal memory decision.")
+        normalized.contains("battery") || normalized.contains("current") -> CurrentExplanation(title, "Battery current is the electrical current Android reports flowing into or out of the battery at the time of the reading.", "The sign depends on the device reporting convention and whether the battery is charging or discharging.", "Repeated readings help establish how the device behaves during different workloads and charging states.", "A current spike does not prove a particular app, person, interception, or compromise caused it.", "Battery telemetry varies by Android device and hardware. Watchtower reports what the operating system exposes.")
+        normalized.contains("uptime") -> CurrentExplanation(title, "System uptime is how long Android reports the device has been running since its last boot.", "It normally increases continuously while the device remains running and resets after a reboot.", "It provides a useful time anchor for interpreting other observations.", "Uptime alone does not tell Watchtower why a reboot happened or who initiated it.", "Android exposes uptime, but not a complete explanation of every reboot cause.")
+        else -> CurrentExplanation(title, "This is a value Watchtower can currently observe from the Android device.", "The current value is the latest reading available to the observatory.", "Repeated observations let Watchtower compare the device with its own history.", "Observation alone does not establish intent, identity, causation, or compromise.", "Visibility depends on Android's public APIs, device hardware, permissions, and OS restrictions.")
+    }
 }
 
 private fun numeric(value: String?): Double? {
