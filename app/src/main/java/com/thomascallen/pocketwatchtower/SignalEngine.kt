@@ -9,6 +9,7 @@ internal data class CorrelationSignal(
     val title: String,
     val window: String,
     val observations: List<Event>,
+    val families: List<String>,
     val whyItMatters: String,
     val possibleReasons: List<String>,
     val whatWouldStrengthen: String,
@@ -16,57 +17,101 @@ internal data class CorrelationSignal(
 )
 
 private val signalTimeFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.US)
+private const val DEFAULT_WINDOW_MS = 5_000L
 
-internal fun detectSignals(events: List<Event>, windowMinutes: Long = 5): List<CorrelationSignal> {
+internal fun signalFamily(event: Event): String {
+    val text = "${event.category} ${event.key}".lowercase(Locale.US)
+    return when {
+        listOf("battery", "charge", "charging", "voltage", "current", "temperature", "temp", "power source", "power").any(text::contains) -> "Power"
+        listOf("ram", "memory", "storage", "disk", "cpu", "load", "uptime", "resource").any(text::contains) -> "Resource"
+        listOf("vpn", "network", "wifi", "wi-fi", "cellular", "mobile data", "connectivity").any(text::contains) -> "Connectivity"
+        listOf("accessibility", "overlay", "draw over", "notification listener", "special access").any(text::contains) -> "Accessibility / Special Access"
+        listOf("package", "application", "app", "install", "uninstall", "update").any(text::contains) -> "Application"
+        listOf("process", "foreground", "background", "visibility").any(text::contains) -> "Process Visibility"
+        listOf("device admin", "device owner", "security", "credential", "lock", "admin").any(text::contains) -> "Security / Administration"
+        else -> "Device State"
+    }
+}
+
+internal fun detectSignals(events: List<Event>, windowMs: Long = DEFAULT_WINDOW_MS): List<CorrelationSignal> {
     if (events.size < 2) return emptyList()
-    val ordered = events.mapNotNull { event -> runCatching { event to signalTimeFormat.parse(event.time)!!.time }.getOrNull() }.sortedBy { it.second }
-    val results = mutableListOf<CorrelationSignal>()
 
-    for (start in ordered.indices) {
-        val firstTime = ordered[start].second
-        val group = ordered.drop(start).takeWhile { it.second - firstTime <= windowMinutes * 60_000L }.map { it.first }
-        if (group.size < 2) continue
+    val ordered = events.mapNotNull { event ->
+        runCatching { event to signalTimeFormat.parse(event.time)!!.time }.getOrNull()
+    }.sortedBy { it.second }
+    if (ordered.size < 2) return emptyList()
 
-        val text = group.joinToString(" ") { "${it.key} ${it.category} ${it.current}" }.lowercase(Locale.US)
-        val families = linkedSetOf<String>()
-        if (text.contains("accessibility") || text.contains("access")) families += "access"
-        if (text.contains("overlay") || text.contains("draw over")) families += "overlay"
-        if (text.contains("vpn") || text.contains("network")) families += "network"
-        if (text.contains("process")) families += "process"
-        if (text.contains("app") || text.contains("package") || text.contains("install")) families += "application"
-        if (text.contains("notification")) families += "notification"
-        if (text.contains("device admin") || text.contains("device owner")) families += "authority"
-        if (text.contains("adb") || text.contains("developer")) families += "developer"
+    val groups = mutableListOf<List<Event>>()
+    var current = mutableListOf(ordered.first().first)
+    var previousTime = ordered.first().second
 
-        val qualifying = families.size >= 2 || (families.contains("application") && families.contains("process"))
-        if (!qualifying) continue
-        val signature = group.map { it.key + "=" + it.current }.sorted().joinToString("|")
-        if (results.any { it.observations.map { e -> e.key + "=" + e.current }.sorted().joinToString("|") == signature }) continue
+    ordered.drop(1).forEach { (event, time) ->
+        if (time - previousTime <= windowMs) {
+            current += event
+        } else {
+            if (current.size >= 2) groups += current.toList()
+            current = mutableListOf(event)
+        }
+        previousTime = time
+    }
+    if (current.size >= 2) groups += current.toList()
+
+    return groups.mapNotNull { group ->
+        val families = group.map(::signalFamily).distinct()
+        if (families.size < 2) return@mapNotNull null
+
+        val title = when {
+            group.any { it.key.lowercase(Locale.US).contains("charging") || it.key.lowercase(Locale.US).contains("power source") } && families.contains("Power") ->
+                "POWER STATE TRANSITION"
+            families.contains("Connectivity") && families.contains("Application") ->
+                "APPLICATION + CONNECTIVITY CHANGE"
+            families.contains("Accessibility / Special Access") && families.contains("Application") ->
+                "APPLICATION + SPECIAL ACCESS CHANGE"
+            else -> "CROSS-FAMILY DEVICE STATE CHANGE"
+        }
 
         val level = when {
             families.size >= 4 -> "CORRELATED SIGNAL — HIGH ATTENTION"
-            families.size >= 3 -> "CORRELATED SIGNAL — ATTENTION"
+            families.size == 3 -> "CORRELATED SIGNAL — ATTENTION"
             else -> "CORRELATED SIGNAL — REVIEW"
         }
-        val reasons = mutableListOf<String>(
-            "The owner intentionally installed or configured an application.",
-            "A legitimate accessibility, automation, security, enterprise, or networking tool changed configuration.",
-            "An application or Android update changed capabilities or runtime behavior."
-        )
-        if (families.contains("authority") || families.contains("developer")) reasons += "A device-management or developer configuration was changed."
-        reasons += "An unexpected configuration or application change occurred; the observed data alone cannot establish the cause."
 
-        val names = group.joinToString(" • ") { "${it.category}/${it.key}" }
-        results += CorrelationSignal(
+        val familyText = families.joinToString(" + ")
+        val durationMs = runCatching {
+            val first = signalTimeFormat.parse(group.first().time)!!.time
+            val last = signalTimeFormat.parse(group.last().time)!!.time
+            last - first
+        }.getOrDefault(0L)
+
+        val reasons = mutableListOf<String>()
+        if (families.contains("Power")) {
+            reasons += "A charger, cable, outlet, battery state, or transient power condition changed."
+            reasons += "Android briefly reported a transition between power states while measurements were being sampled."
+        }
+        if (families.contains("Resource")) {
+            reasons += "Normal application activity, garbage collection, background work, or system activity changed resource use."
+        }
+        if (families.contains("Application")) {
+            reasons += "The owner installed, updated, opened, or configured an application."
+        }
+        if (families.contains("Accessibility / Special Access")) {
+            reasons += "A legitimate accessibility, automation, security, or utility tool changed a special-access state."
+        }
+        if (families.contains("Connectivity")) {
+            reasons += "Network, Wi-Fi, cellular, or VPN state transitioned normally."
+        }
+        reasons += "An unexpected device-state change occurred; the observations alone cannot establish the cause."
+
+        CorrelationSignal(
             level = level,
-            title = "Several related device changes occurred close together",
-            window = "${group.first().time} → ${group.last().time}",
+            title = title,
+            window = "${group.first().time} → ${group.last().time} (${durationMs} ms)",
             observations = group,
-            whyItMatters = "${group.size} observable changes span ${families.size} related evidence areas ($names). Correlation makes the cluster more worthy of review than any single observation, but it does not establish causation or wrongdoing.",
+            families = families,
+            whyItMatters = "${group.size} observations occurred within ${durationMs} ms and span ${families.size} signal families: $familyText. The measurements are more useful as one observable transition than as unrelated individual changes.",
             possibleReasons = reasons.distinct(),
-            whatWouldStrengthen = "Check the affected application's identity, installation/update time, granted special access, accessibility configuration, overlay capability, VPN state, and any related owner action during this window.",
-            limitation = "Watchtower can correlate only observations Android exposes to it. A correlated signal is not proof of spying, compromise, or unauthorized control."
+            whatWouldStrengthen = "Inspect the exact underlying observations, affected application/package state, relevant special-access state, connectivity state, and any owner action occurring in the same time window.",
+            limitation = "Correlation increases review value; it does not establish causation, identity, intent, compromise, spying, or unauthorized control. Watchtower can correlate only state Android exposes to it."
         )
-    }
-    return results.takeLast(8).reversed()
+    }.takeLast(8).reversed()
 }
