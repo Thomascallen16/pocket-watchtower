@@ -12,7 +12,7 @@ Pocket Watchtower does **not** claim to identify who caused a device change mere
 
 **v1.1.0 — Integrity Observatory baseline**
 
-The repository now treats version `1.1.0` as the canonical release line. Android build artifacts are generated from the Gradle `versionName` rather than a second hard-coded CI version.
+The repository now treats version `1.1.0` as the canonical release line. Android build artifacts are generated from the Gradle `versionName` rather than a second hard-coded CI version. Release validation also uses a shell-safe build-time alignment step so the CI workflow cannot fail while rewriting the in-app release label.
 
 ## What it does
 
