@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,7 +38,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private const val VERSION = "0.5.1"
+private const val VERSION = "0.6.0"
 
 private data class Event(
     val time: String,
@@ -173,6 +176,7 @@ class MainActivity : ComponentActivity() {
     private var integrity by mutableStateOf("Not verified")
     private var snapshotHash by mutableStateOf("-")
     private var selectedSection by mutableStateOf("All")
+    private var selectedEvent by mutableStateOf<Event?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -275,12 +279,24 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    item { Text("Change history", style = MaterialTheme.typography.titleLarge) }
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Change history", style = MaterialTheme.typography.titleLarge)
+                            Text("Tap any event to understand what it is.", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                     if (events.isEmpty()) item { Text("No changes recorded.") }
                     items(events.reversed()) { event ->
-                        Card(Modifier.fillMaxWidth()) {
+                        Card(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedEvent = event }
+                        ) {
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("${event.time} • ${event.category}/${event.key}")
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("${event.category} • ${event.key}", style = MaterialTheme.typography.titleMedium)
+                                    Text("ABOUT", style = MaterialTheme.typography.labelMedium)
+                                }
                                 Text("${event.previous ?: "(none)"} → ${event.current}")
                                 Text("SHA-256 ${event.hash.take(24)}…", style = MaterialTheme.typography.bodySmall)
                             }
@@ -295,6 +311,35 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+            }
+
+            selectedEvent?.let { event ->
+                val explanation = explainEvent(event)
+                AlertDialog(
+                    onDismissRequest = { selectedEvent = null },
+                    title = { Text(explanation.title) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("WHAT IT IS", style = MaterialTheme.typography.labelLarge)
+                            Text(explanation.whatItIs)
+                            Text("WHAT IT MEANS", style = MaterialTheme.typography.labelLarge)
+                            Text(explanation.whatItMeans)
+                            Text("WHY IT MATTERS", style = MaterialTheme.typography.labelLarge)
+                            Text(explanation.whyItMatters)
+                            Text("WHAT IT DOES NOT MEAN", style = MaterialTheme.typography.labelLarge)
+                            Text(explanation.doesNotMean)
+                            Text("ANDROID VISIBILITY", style = MaterialTheme.typography.labelLarge)
+                            Text(explanation.visibility)
+                            Text(
+                                "Observed: ${event.previous ?: "(none)"} → ${event.current}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { selectedEvent = null }) { Text("Got it") }
+                    }
+                )
             }
         }
     }
