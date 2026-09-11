@@ -57,6 +57,12 @@ private class WatchStore(context: Context) {
         persist(items, events() + changes, if (changes.isEmpty()) null else chain); return changes
     }
     fun establish(items: List<ObservatoryItem>) = persist(items, events(), prefs.getString("last_hash", "GENESIS"))
+    fun recordManualEvent(key: String, category: String, previous: String?, current: String) {
+        val chain = prefs.getString("last_hash", "GENESIS") ?: "GENESIS"
+        val base = Event(formatter.format(Date()), key, category, previous, current, "")
+        val event = base.copy(hash = hashEvent(base, chain))
+        persist(emptyList(), events() + event, event.hash)
+    }
     fun verify(): Boolean { var chain = "GENESIS"; for (event in events()) { val expected = hashEvent(event.copy(hash = ""), chain); if (expected != event.hash) return false; chain = event.hash }; return chain == (prefs.getString("last_hash", "GENESIS") ?: "GENESIS") }
     fun snapshotHash(): String = sha256(snapshot().toSortedMap().entries.joinToString("|") { "${it.key}=${it.value}" })
     fun exportReport(): String = buildString {
@@ -93,9 +99,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = WatchStore(this); observatory = DeviceObservatory(this); root = RootAccessController(this)
-        rootStatus = root.status()
-        setContent { App() }
-        scan()
+        rootStatus = root.status(); setContent { App() }; scan()
     }
     override fun onResume() { super.onResume(); if (::store.isInitialized) scan() }
     private fun scan() {
@@ -104,23 +108,20 @@ class MainActivity : ComponentActivity() {
         else { val changes = store.scan(collected); status = if (changes.isEmpty()) "No observable changes" else "${changes.size} observable change(s) detected" }
         items = collected; events = store.events(); integrity = if (store.verify()) "VERIFIED" else "INTEGRITY FAILURE"; snapshotHash = store.snapshotHash(); rootStatus = root.status()
     }
-    private fun refreshRoot() { rootStatus = root.status() }
+    private fun refreshRoot() { rootStatus = root.status(); events = store.events(); integrity = if (store.verify()) "VERIFIED" else "INTEGRITY FAILURE" }
 
     @Composable private fun App() {
         MaterialTheme {
             Scaffold(topBar = { TopAppBar(title = { Text("Pocket Watchtower V$VERSION") }) }) { padding ->
-                val sections = listOf("All") + items.map { it.section }.distinct()
-                val visibleItems = if (selectedSection == "All") items else items.filter { it.section == selectedSection }
-                val observedCount = items.count { it.status == "OBSERVED" || it.status == "KNOWN" }
-                val restrictedCount = items.count { it.status.contains("RESTRICTED") || it.status.contains("REQUIRES") }
-                val bursts = activityBursts(events); val timeline = events.reversed(); val signals = detectSignals(events)
+                val sections = listOf("All") + items.map { it.section }.distinct(); val visibleItems = if (selectedSection == "All") items else items.filter { it.section == selectedSection }
+                val observedCount = items.count { it.status == "OBSERVED" || it.status == "KNOWN" }; val restrictedCount = items.count { it.status.contains("RESTRICTED") || it.status.contains("REQUIRES") }; val bursts = activityBursts(events); val timeline = events.reversed(); val signals = detectSignals(events)
                 LazyColumn(Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { Text("OWNER FORENSIC OBSERVATORY", style = MaterialTheme.typography.labelLarge); Text(status, style = MaterialTheme.typography.titleLarge); Text("Integrity: $integrity"); Text("$observedCount directly observed  •  $restrictedCount restricted / permission-bound"); Text("${events.size} recorded change(s)  •  ${items.size} observable items"); Text("${signals.size} correlated signal(s)"); Text("Observe → Record → Correlate → Explain → Verify") } } }
                     item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(onClick = { scan() }) { Text("Scan now") }; OutlinedButton(onClick = { integrity = if (store.verify()) "VERIFIED" else "INTEGRITY FAILURE" }) { Text("Verify") }; OutlinedButton(onClick = { share() }) { Text("Export") } } }
                     item { RootCard() }
                     item { Text("SIGNALS & WHY IT MATTERS", style = MaterialTheme.typography.titleLarge); Text("Correlation is a review aid. An observation is not an accusation.", style = MaterialTheme.typography.bodySmall) }
                     if (signals.isEmpty()) item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { Text("No qualifying correlation", style = MaterialTheme.typography.titleMedium); Text("Watchtower has not observed a qualifying cross-family correlation in the current evidence history."); Text("Zero correlations is a valid result. It does not prove the device is uncompromised.", style = MaterialTheme.typography.bodySmall) } } }
-                    else items(signals) { signal -> Card(Modifier.fillMaxWidth().clickable { selectedSignal = signal }) { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) { Text(signal.level, style = MaterialTheme.typography.titleMedium); Text(signal.title); Text("${signal.families.joinToString(" + ")}"); Text(signal.window, style = MaterialTheme.typography.bodySmall); Text("${signal.observations.size} observations • tap to inspect evidence", style = MaterialTheme.typography.bodySmall) } } }
+                    else items(signals) { signal -> Card(Modifier.fillMaxWidth().clickable { selectedSignal = signal }) { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) { Text(signal.level, style = MaterialTheme.typography.titleMedium); Text(signal.title); Text(signal.families.joinToString(" + ")); Text(signal.window, style = MaterialTheme.typography.bodySmall); Text("${signal.observations.size} observations • tap to inspect evidence", style = MaterialTheme.typography.bodySmall) } } }
                     item { Text("Observable areas", style = MaterialTheme.typography.titleLarge) }
                     item { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { sections.take(4).forEach { section -> OutlinedButton(onClick = { selectedSection = section }) { Text(if (selectedSection == section) "• $section" else section) } } } }
                     item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { Text("Visibility Map", style = MaterialTheme.typography.titleMedium); Text("KNOWN / OBSERVED — Android exposed it."); Text("USER-GRANTED / REQUIRES SPECIAL ACCESS — access depends on the owner."); Text("RESTRICTED BY ANDROID — the app cannot see everything."); Text("UNKNOWN — Watchtower cannot establish the answer from this device.") } } }
@@ -135,52 +136,19 @@ class MainActivity : ComponentActivity() {
                     item { Text("Watchtower reports observable state. It does not prove who caused a change, cannot see provider-side records, and cannot guarantee that a device is uncompromised.", style = MaterialTheme.typography.bodySmall) }
                 }
             }
-            selectedSignal?.let { signal -> SignalDialog(signal) }
-            selectedEvent?.let { event -> EventDialog(event) }
-            selectedCurrent?.let { item -> CurrentDialog(item) }
-            if (showRootDialog) RootDialog()
+            selectedSignal?.let { SignalDialog(it) }; selectedEvent?.let { EventDialog(it) }; selectedCurrent?.let { CurrentDialog(it) }; if (showRootDialog) RootDialog()
         }
     }
 
-    @Composable private fun RootCard() {
-        val state = rootStatus
-        Card(Modifier.fillMaxWidth().clickable { showRootDialog = true }) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("ROOT ACCESS — OWNER CONTROLLED", style = MaterialTheme.typography.titleMedium)
-                Text(when (state?.capability) { RootCapabilityState.AVAILABLE -> "AVAILABLE — privileged identity probe succeeded"; RootCapabilityState.DENIED -> "AVAILABLE — authorization was not granted"; RootCapabilityState.NOT_AVAILABLE -> "NOT AVAILABLE"; else -> "NOT REQUESTED" })
-                Text(state?.detail ?: "Root is optional. Tap to review exactly what it would provide.", style = MaterialTheme.typography.bodySmall)
-                Text("Root is not a normal Android runtime permission. Watchtower never silently escalates privileges.", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
+    @Composable private fun RootCard() { val state = rootStatus; Card(Modifier.fillMaxWidth().clickable { showRootDialog = true }) { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) { Text("ROOT ACCESS — OWNER CONTROLLED", style = MaterialTheme.typography.titleMedium); Text(when (state?.capability) { RootCapabilityState.AVAILABLE -> "AVAILABLE — privileged identity probe succeeded"; RootCapabilityState.DENIED -> "AVAILABLE — authorization was not granted"; RootCapabilityState.NOT_AVAILABLE -> "NOT AVAILABLE"; else -> "NOT REQUESTED" }); Text(state?.detail ?: "Root is optional. Tap to review exactly what it would provide.", style = MaterialTheme.typography.bodySmall); Text("Root is not a normal Android runtime permission. Watchtower never silently escalates privileges.", style = MaterialTheme.typography.bodySmall) } } }
 
-    @Composable private fun RootDialog() {
-        val state = rootStatus
-        AlertDialog(onDismissRequest = { showRootDialog = false }, title = { Text("ROOT ACCESS") }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Watchtower can operate without root.")
-            Text("Root may expose additional device-level observations unavailable through ordinary Android APIs. Nothing is hidden from the owner.")
-            Text("Before access is attempted, you explicitly accept it. The device's normal root authorization mechanism remains in control.")
-            Text("What the probe does: runs a minimal identity check (id) only. It does not modify the device, install anything, bypass authorization, or create hidden persistence.")
-            Text("Current state: ${state?.consent} / ${state?.capability}")
-            Text(state?.detail ?: "No root probe has been authorized.")
-        } }, confirmButton = { Button(onClick = { root.acceptOwnerConsent(); refreshRoot(); showRootDialog = false }) { Text("Grant Root Access") } }, dismissButton = { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { TextButton(onClick = { root.revokeOwnerConsent(); refreshRoot() }) { Text("Revoke") }; TextButton(onClick = { showRootDialog = false }) { Text("Continue Without Root") } } })
-    }
+    @Composable private fun RootDialog() { val state = rootStatus; AlertDialog(onDismissRequest = { showRootDialog = false }, title = { Text("ROOT ACCESS") }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Watchtower can operate without root."); Text("Root may expose additional device-level observations unavailable through ordinary Android APIs. Nothing is hidden from the owner."); Text("Before access is attempted, you explicitly accept it. The device's normal root authorization mechanism remains in control."); Text("What the probe does: runs a minimal identity check (id) only. It does not modify the device, install anything, bypass authorization, or create hidden persistence."); Text("Current state: ${state?.consent} / ${state?.capability}"); Text(state?.detail ?: "No root probe has been authorized.") } }, confirmButton = { Button(onClick = { val before = root.status(); root.acceptOwnerConsent(); val after = root.status(); store.recordManualEvent("Root access consent", "Security", before.consent.name, after.consent.name); refreshRoot(); showRootDialog = false }) { Text("Grant Root Access") } }, dismissButton = { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { TextButton(onClick = { val before = root.status(); root.revokeOwnerConsent(); store.recordManualEvent("Root access consent", "Security", before.consent.name, RootConsentState.REVOKED.name); refreshRoot() }) { Text("Revoke") }; TextButton(onClick = { showRootDialog = false }) { Text("Continue Without Root") } } }) }
 
-    @Composable private fun SignalDialog(signal: CorrelationSignal) {
-        AlertDialog(onDismissRequest = { selectedSignal = null }, title = { Text("SIGNAL: ${signal.level}") }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(signal.title, style = MaterialTheme.typography.titleMedium); Text("SIGNAL FAMILIES", style = MaterialTheme.typography.labelLarge); Text(signal.families.joinToString(" + ")); Text("TIME WINDOW", style = MaterialTheme.typography.labelLarge); Text(signal.window); Text("WHAT HAPPENED", style = MaterialTheme.typography.labelLarge); signal.observations.forEach { Text("• ${it.time} — ${it.category}/${it.key}: ${it.previous ?: "(none)"} → ${it.current}") }; Text("WHY IT MATTERS", style = MaterialTheme.typography.labelLarge); Text(signal.whyItMatters); Text("POSSIBLE REASONS", style = MaterialTheme.typography.labelLarge); signal.possibleReasons.forEach { Text("• $it") }; Text("WHAT WOULD STRENGTHEN IT", style = MaterialTheme.typography.labelLarge); Text(signal.whatWouldStrengthen); Text("WHAT THIS DOES NOT PROVE", style = MaterialTheme.typography.labelLarge); Text(signal.limitation)
-        } }, confirmButton = { TextButton(onClick = { selectedSignal = null }) { Text("Got it") } })
-    }
+    @Composable private fun SignalDialog(signal: CorrelationSignal) { AlertDialog(onDismissRequest = { selectedSignal = null }, title = { Text("SIGNAL: ${signal.level}") }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(signal.title, style = MaterialTheme.typography.titleMedium); Text("SIGNAL FAMILIES", style = MaterialTheme.typography.labelLarge); Text(signal.families.joinToString(" + ")); Text("TIME WINDOW", style = MaterialTheme.typography.labelLarge); Text(signal.window); Text("WHAT HAPPENED", style = MaterialTheme.typography.labelLarge); signal.observations.forEach { Text("• ${it.time} — ${it.category}/${it.key}: ${it.previous ?: "(none)"} → ${it.current}") }; Text("WHY IT MATTERS", style = MaterialTheme.typography.labelLarge); Text(signal.whyItMatters); Text("POSSIBLE REASONS", style = MaterialTheme.typography.labelLarge); signal.possibleReasons.forEach { Text("• $it") }; Text("WHAT WOULD STRENGTHEN IT", style = MaterialTheme.typography.labelLarge); Text(signal.whatWouldStrengthen); Text("WHAT THIS DOES NOT PROVE", style = MaterialTheme.typography.labelLarge); Text(signal.limitation) } }, confirmButton = { TextButton(onClick = { selectedSignal = null }) { Text("Got it") } }) }
 
-    @Composable private fun EventDialog(event: Event) {
-        val explanation = explainEvent(event); val assessment = assessEvent(event, events)
-        AlertDialog(onDismissRequest = { selectedEvent = null }, title = { Text(explanation.title) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("WHAT IT IS", style = MaterialTheme.typography.labelLarge); Text(explanation.whatItIs); Text("WHAT IT MEANS", style = MaterialTheme.typography.labelLarge); Text(explanation.whatItMeans); Text("WHY IT MATTERS", style = MaterialTheme.typography.labelLarge); Text(explanation.whyItMatters); Text("WHAT IT DOES NOT MEAN", style = MaterialTheme.typography.labelLarge); Text(explanation.doesNotMean); Text("EVENT ASSESSMENT", style = MaterialTheme.typography.labelLarge); Text("${assessment.level}. ${assessment.confidence}"); Text(assessment.detail); Text("ANDROID VISIBILITY", style = MaterialTheme.typography.labelLarge); Text(explanation.visibility); Text("Observed: ${event.previous ?: "(none)"} → ${event.current}", style = MaterialTheme.typography.bodySmall) } }, confirmButton = { TextButton(onClick = { selectedEvent = null }) { Text("Got it") } })
-    }
+    @Composable private fun EventDialog(event: Event) { val explanation = explainEvent(event); val assessment = assessEvent(event, events); AlertDialog(onDismissRequest = { selectedEvent = null }, title = { Text(explanation.title) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("WHAT IT IS", style = MaterialTheme.typography.labelLarge); Text(explanation.whatItIs); Text("WHAT IT MEANS", style = MaterialTheme.typography.labelLarge); Text(explanation.whatItMeans); Text("WHY IT MATTERS", style = MaterialTheme.typography.labelLarge); Text(explanation.whyItMatters); Text("WHAT IT DOES NOT MEAN", style = MaterialTheme.typography.labelLarge); Text(explanation.doesNotMean); Text("EVENT ASSESSMENT", style = MaterialTheme.typography.labelLarge); Text("${assessment.level}. ${assessment.confidence}"); Text(assessment.detail); Text("ANDROID VISIBILITY", style = MaterialTheme.typography.labelLarge); Text(explanation.visibility); Text("Observed: ${event.previous ?: "(none)"} → ${event.current}", style = MaterialTheme.typography.bodySmall) } }, confirmButton = { TextButton(onClick = { selectedEvent = null }) { Text("Got it") } }) }
 
-    @Composable private fun CurrentDialog(item: ObservatoryItem) {
-        val explanation = explainCurrentItem(item)
-        AlertDialog(onDismissRequest = { selectedCurrent = null }, title = { Text(explanation.title) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("WHAT IT IS", style = MaterialTheme.typography.labelLarge); Text(explanation.whatItIs); Text("WHAT IT MEANS", style = MaterialTheme.typography.labelLarge); Text(explanation.whatItMeans); Text("WHY IT MATTERS", style = MaterialTheme.typography.labelLarge); Text(explanation.whyItMatters); Text("WHAT IT DOES NOT MEAN", style = MaterialTheme.typography.labelLarge); Text(explanation.doesNotMean); Text("ANDROID VISIBILITY", style = MaterialTheme.typography.labelLarge); Text(explanation.visibility); Text("Current reading: ${item.value}", style = MaterialTheme.typography.bodySmall) } }, confirmButton = { TextButton(onClick = { selectedCurrent = null }) { Text("Got it") } })
-    }
+    @Composable private fun CurrentDialog(item: ObservatoryItem) { val explanation = explainCurrentItem(item); AlertDialog(onDismissRequest = { selectedCurrent = null }, title = { Text(explanation.title) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("WHAT IT IS", style = MaterialTheme.typography.labelLarge); Text(explanation.whatItIs); Text("WHAT IT MEANS", style = MaterialTheme.typography.labelLarge); Text(explanation.whatItMeans); Text("WHY IT MATTERS", style = MaterialTheme.typography.labelLarge); Text(explanation.whyItMatters); Text("WHAT IT DOES NOT MEAN", style = MaterialTheme.typography.labelLarge); Text(explanation.doesNotMean); Text("ANDROID VISIBILITY", style = MaterialTheme.typography.labelLarge); Text(explanation.visibility); Text("Current reading: ${item.value}", style = MaterialTheme.typography.bodySmall) } }, confirmButton = { TextButton(onClick = { selectedCurrent = null }) { Text("Got it") } }) }
 
     private fun share() { val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, store.exportReport()) }; startActivity(Intent.createChooser(intent, "Export Watchtower report")) }
 }
