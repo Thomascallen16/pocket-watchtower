@@ -1,7 +1,7 @@
 package com.thomascallen.pocketwatchtower
 
 import android.Manifest
-import android.app.admin.DevicePolicyManager
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
@@ -10,7 +10,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.telephony.TelephonyManager
-import android.app.KeyguardManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -207,7 +206,6 @@ class MainActivity : ComponentActivity() {
             else -> "Offline/Unknown"
         }
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-        val policy = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val result = mutableListOf(
             Observation("android_version", Build.VERSION.RELEASE ?: "unknown"),
             Observation("security_patch", if (Build.VERSION.SDK_INT >= 23) Build.VERSION.SECURITY_PATCH else "unknown"),
@@ -215,8 +213,7 @@ class MainActivity : ComponentActivity() {
             Observation("network_transport", transport),
             Observation("airplane_mode", Settings.Global.getInt(contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0).toString()),
             Observation("developer_options", Settings.Global.getInt(contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0).toString()),
-            Observation("device_secure", keyguard.isDeviceSecure.toString()),
-            Observation("device_managed", policy.isDeviceManaged.toString())
+            Observation("device_secure", keyguard.isDeviceSecure.toString())
         )
         if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
             val tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
