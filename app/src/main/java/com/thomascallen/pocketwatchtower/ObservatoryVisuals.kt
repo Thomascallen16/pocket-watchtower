@@ -25,13 +25,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlin.math.min
 
-/** Evidence-first visual layer. Visuals communicate observations, not a security score. */
+/** Evidence-first visual layer. Cyber styling adds hierarchy and contrast without creating a security score. */
+private val WatchCyan = Color(0xFF00E5FF)
+private val WatchBlue = Color(0xFF2979FF)
+private val WatchViolet = Color(0xFFB388FF)
+private val WatchGreen = Color(0xFF69F0AE)
+private val WatchAmber = Color(0xFFFFC857)
+private val WatchSurface = Color(0xFF101622)
+private val WatchSurfaceAlt = Color(0xFF172033)
+private val WatchOutline = Color(0xFF30405A)
+
 @Composable
 internal fun ObservatoryVisualSummary(status: String, integrity: String, observedCount: Int, restrictedCount: Int, changeCount: Int, signalCount: Int, events: List<Event>) {
     val totalVisibility = (observedCount + restrictedCount).coerceAtLeast(1)
@@ -43,25 +53,25 @@ internal fun ObservatoryVisualSummary(status: String, integrity: String, observe
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 VisibilityRing(visibilityFraction, Modifier.size(112.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("OBSERVATORY STATUS", style = MaterialTheme.typography.labelLarge)
+                    Text("OBSERVATORY STATUS", style = MaterialTheme.typography.labelLarge, color = WatchCyan)
                     Text(status, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                     Text(if (integrity == "VERIFIED") "Evidence chain verified" else "Evidence chain requires review")
                     Text("${(visibilityFraction * 100).toInt()}% of counted state is directly observable", style = MaterialTheme.typography.bodySmall)
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                VisualMetric("CHANGES", changeCount.toString(), Modifier.weight(1f))
-                VisualMetric("SIGNALS", signalCount.toString(), Modifier.weight(1f))
-                VisualMetric("OBSERVED", observedCount.toString(), Modifier.weight(1f))
+                VisualMetric("CHANGES", changeCount.toString(), WatchAmber, Modifier.weight(1f))
+                VisualMetric("SIGNALS", signalCount.toString(), WatchViolet, Modifier.weight(1f))
+                VisualMetric("OBSERVED", observedCount.toString(), WatchGreen, Modifier.weight(1f))
             }
             EvidenceFlowStrip()
             if (signals.isNotEmpty()) {
-                Text("CORRELATION MAP", style = MaterialTheme.typography.labelLarge)
+                Text("CORRELATION MAP", style = MaterialTheme.typography.labelLarge, color = WatchViolet)
                 Text("The strongest evidence is often the relationship between observations—not one observation by itself.", style = MaterialTheme.typography.bodySmall)
                 signals.take(2).forEach { SignalCorrelationMap(it) }
             }
             if (recent.isNotEmpty()) {
-                Text("RECENT EVIDENCE ACTIVITY", style = MaterialTheme.typography.labelLarge)
+                Text("RECENT EVIDENCE ACTIVITY", style = MaterialTheme.typography.labelLarge, color = WatchCyan)
                 EvidencePulse(recent, Modifier.fillMaxWidth().height(62.dp))
                 Text("${recent.size} recent recorded observation${if (recent.size == 1) "" else "s"}. Height is an activity trace, not a risk score.", style = MaterialTheme.typography.bodySmall)
             } else Text("No recorded change activity yet.", style = MaterialTheme.typography.bodySmall)
@@ -76,17 +86,17 @@ private fun SignalCorrelationMap(signal: CorrelationSignal) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("SIGNAL DETECTED", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    Text("SIGNAL DETECTED", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = WatchViolet)
                     Text(signal.title, style = MaterialTheme.typography.titleMedium)
                 }
-                Text("${nodes.size} nodes", style = MaterialTheme.typography.labelSmall)
+                Text("${nodes.size} nodes", style = MaterialTheme.typography.labelSmall, color = WatchCyan)
             }
             Text(signal.window, style = MaterialTheme.typography.bodySmall)
             Column(Modifier.fillMaxWidth()) {
                 nodes.forEachIndexed { index, event ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-                            Text("${index + 1}", fontWeight = FontWeight.Bold)
+                        Box(Modifier.size(34.dp).clip(CircleShape).background(WatchViolet.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+                            Text("${index + 1}", fontWeight = FontWeight.Bold, color = WatchViolet)
                         }
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -94,32 +104,32 @@ private fun SignalCorrelationMap(signal: CorrelationSignal) {
                             Text("${event.previous ?: "(none)"} → ${event.current}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    if (index < nodes.lastIndex) Box(Modifier.padding(start = 16.dp).width(2.dp).height(14.dp).background(MaterialTheme.colorScheme.outlineVariant))
+                    if (index < nodes.lastIndex) Box(Modifier.padding(start = 16.dp).width(2.dp).height(14.dp).background(WatchOutline))
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SignalStat("AREAS", signal.evidenceAreas.size.toString(), Modifier.weight(1f))
-                SignalStat("CONFIDENCE", if (signal.confidence.startsWith("Moderate")) "MODERATE" else "PRELIMINARY", Modifier.weight(1f))
+                SignalStat("AREAS", signal.evidenceAreas.size.toString(), WatchCyan, Modifier.weight(1f))
+                SignalStat("CONFIDENCE", if (signal.confidence.startsWith("Moderate")) "MODERATE" else "PRELIMINARY", WatchAmber, Modifier.weight(1f))
             }
-            Text("WHY IT MATTERS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Text("WHY IT MATTERS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = WatchCyan)
             Text(signal.whyItMatters, style = MaterialTheme.typography.bodySmall)
-            Text("Correlation increases review value. It does not establish causation.", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+            Text("Correlation increases review value. It does not establish causation.", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = WatchAmber)
         }
     }
 }
 
 @Composable
-private fun SignalStat(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(9.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+private fun SignalStat(label: String, value: String, accent: Color, modifier: Modifier = Modifier) {
+    Column(modifier.clip(RoundedCornerShape(12.dp)).background(accent.copy(alpha = 0.10f)).padding(9.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = accent)
         Text(label, style = MaterialTheme.typography.labelSmall)
     }
 }
 
 @Composable
 private fun VisibilityRing(fraction: Float, modifier: Modifier = Modifier) {
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant
-    val progressColor = MaterialTheme.colorScheme.primary
+    val trackColor = WatchOutline
+    val progressColor = if (fraction >= 0.75f) WatchGreen else if (fraction >= 0.4f) WatchCyan else WatchAmber
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val stroke = 12.dp.toPx()
@@ -130,16 +140,16 @@ private fun VisibilityRing(fraction: Float, modifier: Modifier = Modifier) {
             drawArc(progressColor, -90f, 360f * fraction.coerceIn(0f, 1f), false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("${(fraction * 100).toInt()}%", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("${(fraction * 100).toInt()}%", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = progressColor)
             Text("visible", style = MaterialTheme.typography.labelSmall)
         }
     }
 }
 
 @Composable
-private fun VisualMetric(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier.clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+private fun VisualMetric(label: String, value: String, accent: Color, modifier: Modifier = Modifier) {
+    Column(modifier.clip(RoundedCornerShape(16.dp)).background(accent.copy(alpha = 0.10f)).padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = accent)
         Text(label, style = MaterialTheme.typography.labelSmall)
     }
 }
@@ -147,28 +157,27 @@ private fun VisualMetric(label: String, value: String, modifier: Modifier = Modi
 @Composable
 private fun EvidenceFlowStrip() {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        FlowNode("OBSERVE", "1"); FlowLine(); FlowNode("CORRELATE", "2"); FlowLine(); FlowNode("EXPLAIN", "3"); FlowLine(); FlowNode("VERIFY", "4")
+        FlowNode("OBSERVE", "1", WatchCyan); FlowLine(); FlowNode("CORRELATE", "2", WatchViolet); FlowLine(); FlowNode("EXPLAIN", "3", WatchAmber); FlowLine(); FlowNode("VERIFY", "4", WatchGreen)
     }
 }
 
 @Composable
-private fun FlowNode(label: String, number: String) {
+private fun FlowNode(label: String, number: String, accent: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(Modifier.size(30.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) { Text(number, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold) }
-        Text(label, style = MaterialTheme.typography.labelSmall)
+        Box(Modifier.size(30.dp).clip(CircleShape).background(accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) { Text(number, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = accent) }
+        Text(label, style = MaterialTheme.typography.labelSmall, color = accent)
     }
 }
 
 @Composable
 private fun RowScope.FlowLine() {
-    val lineColor = MaterialTheme.colorScheme.outlineVariant
-    Box(Modifier.weight(1f).height(2.dp).padding(horizontal = 3.dp).background(lineColor))
+    Box(Modifier.weight(1f).height(2.dp).padding(horizontal = 3.dp).background(WatchOutline))
 }
 
 @Composable
 private fun EvidencePulse(events: List<Event>, modifier: Modifier = Modifier) {
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val outlineColor = MaterialTheme.colorScheme.outlineVariant
+    val primaryColor = WatchCyan
+    val outlineColor = WatchOutline
     Canvas(modifier) {
         if (events.isEmpty()) return@Canvas
         val maxHeight = size.height * 0.78f; val baseline = size.height * 0.86f
