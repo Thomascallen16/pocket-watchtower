@@ -33,8 +33,21 @@ jobs:
         run: echo "version=$(sed -n 's/.*versionName = \"\([^\"]*\)\".*/\1/p' app/build.gradle.kts)" >> "$GITHUB_OUTPUT"
 
       - name: Align in-app release label
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
         shell: bash
-        run: sed -i "s/private const val VERSION = \"[^"]*\"/private const val VERSION = \"${{ steps.version.outputs.version }}\"/" app/src/main/java/com/thomascallen/pocketwatchtower/MainActivity.kt
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          path = Path("app/src/main/java/com/thomascallen/pocketwatchtower/MainActivity.kt")
+          text = path.read_text()
+          marker = 'private const val VERSION = "'
+          start = text.index(marker) + len(marker)
+          end = text.index('"', start)
+          version = os.environ["RELEASE_VERSION"]
+          path.write_text(text[:start] + version + text[end:])
+          PY
 
       - name: Build release APK
         run: gradle :app:assembleRelease --stacktrace
