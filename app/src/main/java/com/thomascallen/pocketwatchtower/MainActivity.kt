@@ -3,11 +3,14 @@ package com.thomascallen.pocketwatchtower
 import android.Manifest
 import android.app.KeyguardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.telephony.TelephonyManager
 import androidx.activity.ComponentActivity
@@ -31,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -43,16 +47,23 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private const val VERSION = "0.2.0"
+private const val VERSION = "0.3.0"
 private const val OBS_PREFIX = "obs_"
 
-private data class Observation(val key: String, val value: String)
+private data class Observation(
+    val key: String,
+    val value: String,
+    val category: String
+)
+
 private data class Event(
     val time: String,
     val key: String,
+    val category: String,
     val previous: String?,
     val current: String,
-    val hash: String
+    val hash: String,
+    val test: Boolean = false
 )
 
 private class WatchStore(context: Context) {
@@ -65,16 +76,19 @@ private class WatchStore(context: Context) {
         .mapValues { it.value.toString() }
 
     fun events(): List<Event> {
-        val array = runCatching { JSONArray(prefs.getString("events_json", "[]")) }.getOrDefault(JSONArray())
+        val array = runCatching { JSONArray(prefs.getString("events_json", "[]")) }
+            .getOrDefault(JSONArray())
         return buildList {
             for (i in 0 until array.length()) {
                 val item = array.optJSONObject(i) ?: continue
                 add(Event(
                     time = item.optString("time"),
                     key = item.optString("key"),
+                    category = item.optString("category", "unknown"),
                     previous = if (item.has("previous") && !item.isNull("previous")) item.optString("previous") else null,
                     current = item.optString("current"),
-                    hash = item.optString("hash")
+                    hash = item.optString("hash"),
+                    test = item.optBoolean("test", false)
                 ))
             }
         }
@@ -88,26 +102,41 @@ private class WatchStore(context: Context) {
         val newEvents = observations.mapNotNull { obs ->
             val old = previous[obs.key]
             if (old != null && old != obs.value) {
-                val event = Event(formatter.format(Date()), obs.key, old, obs.value, "")
+                val event = Event(
+                    time = formatter.format(Date()),
+                    key = obs.key,
+                    category = obs.category,
+                    previous = old,
+                    current = obs.value,
+                    hash = ""
+                )
                 val hash = hashEvent(event, chainHash)
                 chainHash = hash
                 event.copy(hash = hash)
             } else null
         }
-
-        val allEvents = events() + newEvents
-        val editor = prefs.edit()
-        observations.forEach { editor.putString(OBS_PREFIX + it.key, it.value) }
-        if (newEvents.isNotEmpty()) editor.putString("last_hash", newEvents.last().hash)
-        editor.putString("events_json", encodeEvents(allEvents))
-        editor.apply()
+        persistSnapshot(observations, events() + newEvents, newEvents.lastOrNull()?.hash)
         return newEvents
     }
 
     fun establish(observations: List<Observation>) {
-        val editor = prefs.edit()
-        observations.forEach { editor.putString(OBS_PREFIX + it.key, it.value) }
-        editor.apply()
+        persistSnapshot(observations, events(), previousHash())
+    }
+
+    fun recordTest(key: String, category: String, previous: String, current: String): Event {
+        val event = Event(
+            time = formatter.format(Date()),
+            key = key,
+            category = category,
+            previous = previous,
+            current = current,
+            hash = "",
+            test = true
+        )
+        val hash = hashEvent(event, previousHash())
+        val completed = event.copy(hash = hash)
+        persistEvents(events() + completed, hash)
+        return completed
     }
 
     fun previousHash(): String = prefs.getString("last_hash", "GENESIS") ?: "GENESIS"
@@ -122,8 +151,58 @@ private class WatchStore(context: Context) {
         return chainHash == previousHash()
     }
 
+    fun snapshotHash(): String = sha256(
+        baseline().toSortedMap().entries.joinToString("|") { "${it.key}=${it.value}" }
+    )
+
+    fun exportText(): String = buildString {
+        appendLine("POCKET WATCHTOWER v$VERSION")
+        appendLine("Local device integrity event report")
+        appendLine("Generated: ${formatter.format(Date())}")
+        appendLine("Integrity: ${if (verify()) "VERIFIED" else "INTEGRITY FAILURE"}")
+        appendLine("Current snapshot SHA-256: ${snapshotHash()}")
+        appendLine("Event count: ${events().size}")
+        appendLine()
+        if (events().isEmpty()) appendLine("No changes recorded.")
+        events().forEach {
+            appendLine("${it.time} | ${if (it.test) "TEST" else "CHANGE DETECTED"} | ${it.category}/${it.key}")
+            appendLine("  Previous: ${it.previous ?: "(none)"}")
+            appendLine("  Current:  ${it.current}")
+            appendLine("  Hash:     ${it.hash}")
+            appendLine()
+        }
+        appendLine("NOTE: Watchtower records observable device state locally. It is not a root-level or forensic guarantee.")
+    }
+
+    private fun persistSnapshot(
+        observations: List<Observation>,
+        history: List<Event>,
+        lastHash: String?
+    ) {
+        val editor = prefs.edit()
+        observations.forEach { editor.putString(OBS_PREFIX + it.key, it.value) }
+        editor.putString("events_json", encodeEvents(history))
+        if (lastHash != null) editor.putString("last_hash", lastHash)
+        editor.apply()
+    }
+
+    private fun persistEvents(history: List<Event>, lastHash: String) {
+        prefs.edit()
+            .putString("events_json", encodeEvents(history))
+            .putString("last_hash", lastHash)
+            .apply()
+    }
+
     private fun hashEvent(event: Event, previousHash: String): String {
-        val raw = listOf(previousHash, event.time, event.key, event.previous ?: "", event.current).joinToString("|")
+        val raw = listOf(
+            previousHash,
+            event.time,
+            event.key,
+            event.category,
+            event.previous ?: "",
+            event.current,
+            event.test.toString()
+        ).joinToString("|")
         return sha256(raw)
     }
 
@@ -132,29 +211,14 @@ private class WatchStore(context: Context) {
             put(JSONObject().apply {
                 put("time", event.time)
                 put("key", event.key)
+                put("category", event.category)
                 put("previous", event.previous)
                 put("current", event.current)
                 put("hash", event.hash)
+                put("test", event.test)
             })
         }
     }.toString()
-
-    fun exportText(): String = buildString {
-        appendLine("POCKET WATCHTOWER v$VERSION")
-        appendLine("Local device integrity event report")
-        appendLine("Generated: ${formatter.format(Date())}")
-        appendLine("Integrity: ${if (verify()) "VERIFIED" else "INTEGRITY FAILURE"}")
-        appendLine()
-        val history = events()
-        if (history.isEmpty()) appendLine("No changes recorded.")
-        history.forEach {
-            appendLine("${it.time} | CHANGE DETECTED | ${it.key}")
-            appendLine("  Previous: ${it.previous ?: "(none)"}")
-            appendLine("  Current:  ${it.current}")
-            appendLine("  Hash:     ${it.hash}")
-            appendLine()
-        }
-    }
 }
 
 private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
@@ -167,6 +231,8 @@ class MainActivity : ComponentActivity() {
     private var status by mutableStateOf("No baseline yet")
     private var integrity by mutableStateOf("Not verified")
     private var observations by mutableStateOf(listOf<Observation>())
+    private var snapshotHash by mutableStateOf("-")
+    private var lastScan by mutableStateOf("-")
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -180,6 +246,11 @@ class MainActivity : ComponentActivity() {
         scan()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::store.isInitialized) scan()
+    }
+
     private fun scan() {
         val obs = collectObservations()
         observations = obs
@@ -188,11 +259,25 @@ class MainActivity : ComponentActivity() {
             status = "Baseline established"
         } else {
             val newEvents = store.scan(obs)
-            events = store.events()
             status = if (newEvents.isEmpty()) "No observable changes" else "${newEvents.size} change(s) detected"
         }
-        integrity = if (store.verify()) "VERIFIED" else "INTEGRITY FAILURE"
         events = store.events()
+        integrity = if (store.verify()) "VERIFIED" else "INTEGRITY FAILURE"
+        snapshotHash = store.snapshotHash()
+        lastScan = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
+    }
+
+    private fun runDetectionTest() {
+        val test = store.recordTest(
+            key = "watchtower_self_test",
+            category = "engine",
+            previous = "baseline",
+            current = "deliberate-test-change"
+        )
+        events = store.events()
+        integrity = if (store.verify()) "VERIFIED" else "INTEGRITY FAILURE"
+        status = "Detection test recorded"
+        snapshotHash = store.snapshotHash()
     }
 
     private fun collectObservations(): List<Observation> {
@@ -203,28 +288,37 @@ class MainActivity : ComponentActivity() {
             caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true -> "VPN"
             caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true -> "Wi-Fi"
             caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true -> "Mobile"
+            caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true -> "Ethernet"
             else -> "Offline/Unknown"
         }
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        val battery = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        val batteryPct = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        val uptimeMinutes = SystemClock.elapsedRealtime() / 60_000L
         val result = mutableListOf(
-            Observation("android_version", Build.VERSION.RELEASE ?: "unknown"),
-            Observation("security_patch", if (Build.VERSION.SDK_INT >= 23) Build.VERSION.SECURITY_PATCH else "unknown"),
-            Observation("device_model", "${Build.MANUFACTURER} ${Build.MODEL}"),
-            Observation("network_transport", transport),
-            Observation("airplane_mode", Settings.Global.getInt(contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0).toString()),
-            Observation("developer_options", Settings.Global.getInt(contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0).toString()),
-            Observation("device_secure", keyguard.isDeviceSecure.toString())
+            Observation("android_version", Build.VERSION.RELEASE ?: "unknown", "platform"),
+            Observation("security_patch", if (Build.VERSION.SDK_INT >= 23) Build.VERSION.SECURITY_PATCH else "unknown", "security"),
+            Observation("device_model", "${Build.MANUFACTURER} ${Build.MODEL}", "identity"),
+            Observation("build_fingerprint", Build.FINGERPRINT ?: "unknown", "identity"),
+            Observation("network_transport", transport, "network"),
+            Observation("vpn_active", (caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true).toString(), "network"),
+            Observation("airplane_mode", Settings.Global.getInt(contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0).toString(), "network"),
+            Observation("developer_options", Settings.Global.getInt(contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0).toString(), "security"),
+            Observation("device_secure", keyguard.isDeviceSecure.toString(), "security"),
+            Observation("battery_percent", batteryPct.toString(), "power"),
+            Observation("uptime_minutes", uptimeMinutes.toString(), "runtime")
         )
         if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
             val tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-            result += Observation("sim_state", tm.simState.toString())
-            result += Observation("network_operator", tm.networkOperatorName.ifBlank { "unknown" })
+            result += Observation("sim_state", tm.simState.toString(), "cellular")
+            result += Observation("network_operator", tm.networkOperatorName.ifBlank { "unknown" }, "cellular")
+            result += Observation("phone_type", tm.phoneType.toString(), "cellular")
         }
         return result
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
-    @androidx.compose.runtime.Composable
+    @Composable
     private fun App() {
         MaterialTheme {
             Scaffold(topBar = { TopAppBar(title = { Text("Pocket Watchtower v$VERSION") }) }) { padding ->
@@ -238,6 +332,8 @@ class MainActivity : ComponentActivity() {
                                 Text(status, style = MaterialTheme.typography.titleMedium)
                                 Spacer(Modifier.height(6.dp))
                                 Text("Integrity: $integrity")
+                                Text("Last scan: $lastScan")
+                                Text("Events: ${events.size}")
                                 Spacer(Modifier.height(6.dp))
                                 Text("Local-first. Observable changes, not accusations.")
                             }
@@ -246,29 +342,43 @@ class MainActivity : ComponentActivity() {
                     item {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = {
-                                if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED)
+                                if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
                                     permissionLauncher.launch(Manifest.permission.READ_PHONE_STATE)
-                                else scan()
+                                } else scan()
                             }) { Text("Run scan") }
                             OutlinedButton(onClick = {
                                 integrity = if (store.verify()) "VERIFIED" else "INTEGRITY FAILURE"
                             }) { Text("Verify") }
-                            OutlinedButton(onClick = { shareReport() }) { Text("Export") }
                         }
                     }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { runDetectionTest() }) { Text("Test detection") }
+                            OutlinedButton(onClick = { shareReport() }) { Text("Export report") }
+                        }
+                    }
+                    item { Text("Evidence snapshot", style = MaterialTheme.typography.titleLarge) }
+                    item { Text("Snapshot SHA-256: ${snapshotHash.take(32)}…") }
+                    item { Text("This fingerprint represents the currently observed state.") }
                     item { Text("Current observations", style = MaterialTheme.typography.titleLarge) }
-                    items(observations) { Text("${it.key}: ${it.value}") }
+                    items(observations) { Text("[${it.category}] ${it.key}: ${it.value}") }
                     item { Text("Saved event history", style = MaterialTheme.typography.titleLarge) }
                     if (events.isEmpty()) item { Text("No changes recorded.") }
                     items(events.reversed()) { event ->
                         Card(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(12.dp)) {
-                                Text("${event.time}  •  CHANGE DETECTED")
-                                Text(event.key)
+                                Text("${event.time}  •  ${if (event.test) "SELF-TEST" else "CHANGE DETECTED"}")
+                                Text("[${event.category}] ${event.key}")
                                 Text("${event.previous ?: "(none)"} → ${event.current}")
-                                Text("SHA-256: ${event.hash.take(20)}…")
+                                Text("SHA-256: ${event.hash.take(24)}…")
                             }
                         }
+                    }
+                    item {
+                        Text(
+                            "Watchtower is an observation and evidence tool. It cannot guarantee protection against a compromised or rooted device.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
@@ -276,10 +386,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun shareReport() {
-        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(android.content.Intent.EXTRA_TEXT, store.exportText())
+            putExtra(Intent.EXTRA_TEXT, store.exportText())
         }
-        startActivity(android.content.Intent.createChooser(intent, "Export Watchtower report"))
+        startActivity(Intent.createChooser(intent, "Export Watchtower report"))
     }
 }
