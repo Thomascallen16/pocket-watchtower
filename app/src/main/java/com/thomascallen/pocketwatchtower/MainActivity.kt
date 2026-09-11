@@ -35,7 +35,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private const val VERSION = "0.5.0"
+private const val VERSION = "0.5.1"
 
 private data class Event(
     val time: String,
