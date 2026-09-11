@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
 
     steps:
       - name: Checkout
@@ -61,10 +61,19 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk \
             "app/build/outputs/apk/release/Pocket-Watchtower-v${{ steps.version.outputs.version }}.apk"
 
-      - name: Upload release APK
+      - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: pocket-watchtower-v${{ steps.version.outputs.version }}-release
           path: app/build/outputs/apk/release/Pocket-Watchtower-v${{ steps.version.outputs.version }}.apk
           if-no-files-found: error
           retention-days: 90
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Pocket Watchtower v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: app/build/outputs/apk/release/Pocket-Watchtower-v${{ steps.version.outputs.version }}.apk
