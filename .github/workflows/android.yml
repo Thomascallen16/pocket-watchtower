@@ -1,8 +1,8 @@
-name: Android build
+name: Android v1.1 build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ v1.1-correlation-root-consent ]
   pull_request:
     branches: [ main ]
 
@@ -31,11 +31,11 @@ jobs:
         run: gradle :app:assembleRelease --stacktrace
 
       - name: Give release APK a clean filename
-        run: cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/Pocket-Watchtower-v0.8.0.apk
+        run: cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/Pocket-Watchtower-v1.1.0.apk
 
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
-          name: pocket-watchtower-v0.8.0-release
-          path: app/build/outputs/apk/release/Pocket-Watchtower-v0.8.0.apk
+          name: pocket-watchtower-v1.1.0-release
+          path: app/build/outputs/apk/release/Pocket-Watchtower-v1.1.0.apk
           if-no-files-found: error
