@@ -9,9 +9,13 @@ internal data class CorrelationSignal(
     val title: String,
     val window: String,
     val observations: List<Event>,
+    val evidenceAreas: List<String>,
+    val confidence: String,
+    val whatHappened: String,
     val whyItMatters: String,
     val possibleReasons: List<String>,
     val whatWouldStrengthen: String,
+    val doesNotProve: String,
     val limitation: String
 )
 
@@ -48,6 +52,11 @@ internal fun detectSignals(events: List<Event>, windowMinutes: Long = 5): List<C
             families.size >= 3 -> "CORRELATED SIGNAL — ATTENTION"
             else -> "CORRELATED SIGNAL — REVIEW"
         }
+        val confidence = when {
+            families.size >= 4 -> "Moderate — multiple independent observable areas changed in one window."
+            families.size >= 3 -> "Moderate — several related observable areas changed in one window."
+            else -> "Preliminary — timing and evidence-area diversity justify review, but the cause is unresolved."
+        }
         val reasons = mutableListOf<String>(
             "The owner intentionally installed or configured an application.",
             "A legitimate accessibility, automation, security, enterprise, or networking tool changed configuration.",
@@ -57,15 +66,26 @@ internal fun detectSignals(events: List<Event>, windowMinutes: Long = 5): List<C
         reasons += "An unexpected configuration or application change occurred; the observed data alone cannot establish the cause."
 
         val names = group.joinToString(" • ") { "${it.category}/${it.key}" }
+        val areas = families.map { it.replaceFirstChar { c -> c.uppercase() } }
+        val whatHappened = "${group.size} observable change(s) occurred between ${group.first().time} and ${group.last().time}, spanning ${areas.size} evidence area(s): ${areas.joinToString(", ")}. The engine can establish the timing and recorded values; it cannot establish intent from these observations alone."
+        val why = "The cluster is more worthy of review than any single observation because multiple evidence areas changed within the same window. This increases review value, not proof of causation or wrongdoing."
+        val strengthen = "Identify the affected application or service and compare installation/update time, granted special access, accessibility state, overlay capability, VPN/network state, process visibility, device-management state, and owner actions during this window."
+        val notProve = "This signal does not prove spying, compromise, unauthorized control, malicious intent, or that one observed change caused another."
+        val limitation = "Watchtower can correlate only observations Android exposes to it. Android may restrict process, package, permission, network, and provider-side visibility."
+
         results += CorrelationSignal(
             level = level,
             title = "Several related device changes occurred close together",
             window = "${group.first().time} → ${group.last().time}",
             observations = group,
-            whyItMatters = "${group.size} observable changes span ${families.size} related evidence areas ($names). Correlation makes the cluster more worthy of review than any single observation, but it does not establish causation or wrongdoing.",
+            evidenceAreas = areas,
+            confidence = confidence,
+            whatHappened = whatHappened,
+            whyItMatters = why,
             possibleReasons = reasons.distinct(),
-            whatWouldStrengthen = "Check the affected application's identity, installation/update time, granted special access, accessibility configuration, overlay capability, VPN state, and any related owner action during this window.",
-            limitation = "Watchtower can correlate only observations Android exposes to it. A correlated signal is not proof of spying, compromise, or unauthorized control."
+            whatWouldStrengthen = strengthen,
+            doesNotProve = notProve,
+            limitation = limitation
         )
     }
     return results.takeLast(8).reversed()
