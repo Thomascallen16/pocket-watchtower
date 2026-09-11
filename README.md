@@ -10,9 +10,9 @@ Pocket Watchtower does **not** claim to identify who caused a device change mere
 
 ## Current release
 
-**v1.1.1 — Cyber Observatory + Owner Actions refinement**
+**v1.1.2 — Cyber Observatory + Owner Actions refinement**
 
-The v1.1.1 build keeps the evidence-first observatory model while adding a restrained cyber-forensic visual treatment, clearer Owner Actions boundaries, and a corrected Android release workflow that builds from `main` and derives the APK artifact name from Gradle `versionName`.
+The v1.1.2 build keeps the evidence-first observatory model while adding a restrained cyber-forensic visual treatment, clearer Owner Actions boundaries, and a release workflow that builds from `main`, derives the APK artifact name from Gradle `versionName`, and publishes the APK as a GitHub Release.
 
 ## What it does
 
@@ -109,7 +109,7 @@ It must never represent an unexplained event as proof of law-enforcement activit
 
 ## Build
 
-The implementation is native Android using Kotlin, Jetpack Compose and AndroidX. The release workflow builds the release APK with JDK 17 from `main`, derives its artifact name from the application's Gradle version, and supports manual dispatch.
+The implementation is native Android using Kotlin, Jetpack Compose and AndroidX. The release workflow builds the release APK with JDK 17 from `main`, derives its artifact name from the application's Gradle version, and publishes the release APK for main-branch builds.
 
 The canonical product specification is [`POCKET_WATCHTOWER_BUILD_SPEC.md`](./POCKET_WATCHTOWER_BUILD_SPEC.md).
 
