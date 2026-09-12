@@ -43,7 +43,7 @@ class OwnerActionsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         actions = OwnerActions(this)
         targets = loadApps()
-        setContent { OwnerActionScreen() }
+        setContent { WatchtowerTheme { OwnerActionScreen() } }
     }
 
     private fun loadApps(): List<OwnerAppTarget> = packageManager.getInstalledApplications(0)
