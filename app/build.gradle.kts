@@ -12,8 +12,8 @@ android {
         applicationId = "com.thomascallen.pocketwatchtower"
         minSdk = 26
         targetSdk = 36
-        versionCode = 112
-        versionName = "1.1.2"
+        versionCode = 113
+        versionName = "1.1.3"
     }
 
     buildFeatures { compose = true }
