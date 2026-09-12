@@ -23,23 +23,30 @@ private val WatchtowerColors = darkColorScheme(
     onTertiary = Color(0xFF002116),
     tertiaryContainer = Color(0xFF005235),
     onTertiaryContainer = Color(0xFF8AFFC7),
-    error = Color(0xFFFF6B6B),
+    error = Color(0xFFFF3B5C),
     onError = Color(0xFF2B0000),
-    background = Color(0xFF080D16),
+    background = Color(0xFF050A12),
     onBackground = Color(0xFFE7F0FA),
-    surface = Color(0xFF0D1420),
+    surface = Color(0xFF09111D),
     onSurface = Color(0xFFE7F0FA),
-    surfaceVariant = Color(0xFF172033),
+    surfaceVariant = Color(0xFF101C2B),
     onSurfaceVariant = Color(0xFFB8C5D6),
-    outline = Color(0xFF30405A),
-    outlineVariant = Color(0xFF202C40)
+    outline = Color(0xFF24506A),
+    outlineVariant = Color(0xFF173047),
+    surfaceDim = Color(0xFF050A12),
+    surfaceBright = Color(0xFF142438),
+    surfaceContainerLowest = Color(0xFF03070D),
+    surfaceContainerLow = Color(0xFF07101B),
+    surfaceContainer = Color(0xFF0A1522),
+    surfaceContainerHigh = Color(0xFF0E1A2A),
+    surfaceContainerHighest = Color(0xFF122033)
 )
 
 @Composable
 internal fun WatchtowerTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = WatchtowerColors) {
         Surface(
-            modifier = Modifier.fillMaxSize().background(Color(0xFF080D16)),
+            modifier = Modifier.fillMaxSize().background(WatchtowerColors.background),
             color = WatchtowerColors.background,
             contentColor = WatchtowerColors.onBackground
         ) {
