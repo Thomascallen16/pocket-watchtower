@@ -1,0 +1,6 @@
+# Review ownership for sensitive repository areas.
+# Branch protection should require review from these owners before merge.
+
+* @Thomascallen16
+.github/workflows/ @Thomascallen16
+app/src/main/ @Thomascallen16
