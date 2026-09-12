@@ -1,4 +1,4 @@
-name: Android build
+name: Android validation
 
 on:
   push:
@@ -27,37 +27,15 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Read release version
-        id: version
-        shell: bash
-        run: echo "version=$(sed -n 's/.*versionName = \"\([^\"]*\)\".*/\1/p' app/build.gradle.kts)" >> "$GITHUB_OUTPUT"
-
-      - name: Align in-app release label
-        env:
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+      - name: Validate release version
         shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import os
-          path = Path("app/src/main/java/com/thomascallen/pocketwatchtower/MainActivity.kt")
-          text = path.read_text()
-          marker = 'private const val VERSION = "'
-          start = text.index(marker) + len(marker)
-          end = text.index('"', start)
-          version = os.environ["RELEASE_VERSION"]
-          path.write_text(text[:start] + version + text[end:])
-          PY
+          VERSION="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"\([^"]*\)"[[:space:]]*$/\1/p' app/build.gradle.kts | head -n 1)"
+          test -n "$VERSION"
+          echo "Validating Pocket Watchtower v$VERSION"
 
-      - name: Build release APK
-        run: gradle :app:assembleRelease --stacktrace
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --stacktrace
 
-      - name: Give release APK a clean filename
-        run: cp app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/Pocket-Watchtower-v${{ steps.version.outputs.version }}.apk"
-
-      - name: Upload release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: pocket-watchtower-v${{ steps.version.outputs.version }}-release
-          path: app/build/outputs/apk/release/Pocket-Watchtower-v${{ steps.version.outputs.version }}.apk
-          if-no-files-found: error
+      - name: Verify debug APK exists
+        run: test -f app/build/outputs/apk/debug/app-debug.apk
