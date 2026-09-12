@@ -3,13 +3,19 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="false"
         android:label="Pocket Watchtower"
         android:supportsRtl="true"
         android:theme="@style/Theme.PocketWatchtower">
+        <provider
+            android:name=".WatchtowerStartupProvider"
+            android:authorities="com.thomascallen.pocketwatchtower.startup"
+            android:exported="false" />
         <activity android:name=".OwnerActionsActivity" android:exported="false" android:label="Owner Actions" />
+        <activity android:name=".WatchtowerTestRangeActivity" android:exported="false" android:label="Watchtower Test Range" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
