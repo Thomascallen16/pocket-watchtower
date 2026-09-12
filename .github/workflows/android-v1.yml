@@ -5,8 +5,6 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  issues:
-    types: [opened]
   workflow_dispatch:
 
 jobs:
@@ -14,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      issues: write
 
     steps:
       - name: Checkout
@@ -48,8 +45,6 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # MainActivity is kept compatible with the existing source layout, while
-          # the release build injects the canonical Gradle version and cyber theme.
           sed -i 's/MaterialTheme {/WatchtowerTheme {/' app/src/main/java/com/thomascallen/pocketwatchtower/MainActivity.kt
           sed -i -E "s/private const val VERSION = \"[^\"]+\"/private const val VERSION = \"${VERSION}\"/" app/src/main/java/com/thomascallen/pocketwatchtower/MainActivity.kt
           echo "Applied Pocket Watchtower cyber-forensic UI theme for v$VERSION"
@@ -77,22 +72,10 @@ jobs:
           retention-days: 90
 
       - name: Publish GitHub Release
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'issues' && github.event.action == 'opened' && startsWith(github.event.issue.title, 'Release Pocket Watchtower v1.1.2'))
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: Pocket Watchtower v${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: app/build/outputs/apk/release/Pocket-Watchtower-v${{ steps.version.outputs.version }}.apk
-
-      - name: Close release trigger issue
-        if: github.event_name == 'issues' && github.event.action == 'opened' && startsWith(github.event.issue.title, 'Release Pocket Watchtower v1.1.2')
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.issues.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              state: 'closed'
-            })
