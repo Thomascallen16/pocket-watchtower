@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 
 private data class TestResult(val name: String, val passed: Boolean, val detail: String)
 
+@OptIn(ExperimentalMaterial3Api::class)
 class WatchtowerTestRangeActivity : ComponentActivity() {
     private var results by mutableStateOf(emptyList<TestResult>())
     private var running by mutableStateOf(false)
