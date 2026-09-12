@@ -82,6 +82,15 @@ class OwnerActionsActivity : ComponentActivity() {
                 item {
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("WATCHTOWER TEST RANGE", style = MaterialTheme.typography.titleMedium)
+                            Text("Run a harmless simulation to prove the alert, signal, and integrity-warning paths before relying on them.", style = MaterialTheme.typography.bodySmall)
+                            Button(onClick = { startActivity(android.content.Intent(this@OwnerActionsActivity, WatchtowerTestRangeActivity::class.java)) }) { Text("OPEN TEST RANGE") }
+                        }
+                    }
+                }
+                item {
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("File cleanup", style = MaterialTheme.typography.titleMedium)
                             Text("Choose exact files through Android's document picker. Watchtower never guesses which files you meant to delete.", style = MaterialTheme.typography.bodySmall)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
