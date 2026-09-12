@@ -31,13 +31,6 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Apply release UI theme
-        shell: bash
-        run: |
-          find app/src/main/java -name '*.kt' -print0 | xargs -0 sed -i 's/MaterialTheme {/WatchtowerTheme {/g'
-          sed -i 's/private const val VERSION = "1.0.0"/private const val VERSION = "1.1.1"/' app/src/main/java/com/thomascallen/pocketwatchtower/MainActivity.kt
-          echo "Applied Pocket Watchtower cyber-forensic UI theme"
-
       - name: Read app version
         id: version
         shell: bash
@@ -49,6 +42,17 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building Pocket Watchtower v$VERSION"
+
+      - name: Apply release UI theme
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # MainActivity is kept compatible with the existing source layout, while
+          # the release build injects the canonical Gradle version and cyber theme.
+          sed -i 's/MaterialTheme {/WatchtowerTheme {/' app/src/main/java/com/thomascallen/pocketwatchtower/MainActivity.kt
+          sed -i -E "s/private const val VERSION = \"[^\"]+\"/private const val VERSION = \"${VERSION}\"/" app/src/main/java/com/thomascallen/pocketwatchtower/MainActivity.kt
+          echo "Applied Pocket Watchtower cyber-forensic UI theme for v$VERSION"
 
       - name: Build release APK
         run: gradle :app:assembleRelease --stacktrace
