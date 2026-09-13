@@ -10,9 +10,9 @@ Pocket Watchtower does **not** claim to identify who caused a device change mere
 
 ## Current release
 
-**v1.1.2 — Cyber Observatory + Owner Actions refinement**
+**v1.3.0 — Sensor, privilege, package monitoring + evidence correlation**
 
-The v1.1.2 build keeps the evidence-first observatory model while adding a restrained cyber-forensic visual treatment, clearer Owner Actions boundaries, and a release workflow that builds from `main`, derives the APK artifact name from Gradle `versionName`, and publishes the APK as a GitHub Release.
+The v1.3.0 build expands device-side observability across sensors, elevated access, package inventory and Android visibility boundaries. It preserves the evidence-first model while adding conservative event correlation for changes that occur in the same time window. Correlation increases review value; it does not establish causation.
 
 ## What it does
 
@@ -56,7 +56,7 @@ Installed applications to the extent Android permits, including system/user clas
 
 ### Authority Map
 
-Device administrator, device owner, accessibility services, VPN, notification access, usage access, overlay access, and other elevated capabilities exposed by Android.
+Device administrator, device owner, accessibility services, VPN, notification access, usage access, overlay access, developer/ADB state, and other elevated capabilities exposed by Android.
 
 ### Visibility Map
 
@@ -75,7 +75,7 @@ The owner can establish a local baseline and later see observable changes in the
 
 ### Event Intelligence
 
-Recorded changes can be grouped into activity bursts and conservative correlation signals. The intelligence layer explains why an observation may matter without turning timing or correlation into a claim of causation.
+Recorded changes can be grouped into activity bursts and conservative correlation signals. The intelligence layer explains why an observation may matter without turning timing or correlation into a claim of causation. v1.3.0 specifically recognizes package-inventory changes occurring near significant battery-state changes as a **review signal**, while preserving the distinction between temporal association and causation.
 
 ### Local Audit History
 
