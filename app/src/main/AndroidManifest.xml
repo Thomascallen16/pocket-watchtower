@@ -15,7 +15,8 @@
             android:exported="false" />
         <activity android:name=".OwnerActionsActivity" android:exported="false" android:label="Owner Actions" />
         <activity android:name=".WatchtowerTestRangeActivity" android:exported="false" android:label="Watchtower Test Range" />
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity" android:exported="false" android:label="Full Observatory" />
+        <activity android:name=".PocketHomeActivity" android:exported="true" android:label="Pocket Watchtower">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
