@@ -299,7 +299,7 @@ private fun verifyStoredChain(context: Context): Boolean {
     for (i in 0 until array.length()) {
         val o = array.optJSONObject(i) ?: continue
         val event = Event(o.optString("time"), o.optString("key"), o.optString("category"), if (o.isNull("previous")) null else o.optString("previous"), o.optString("current"), o.optString("hash"))
-        val expected = sha256(listOf(previous, event.time, event.key, event.category, event.previous ?: "", event.current).joinToString("|"))
+        val expected = dashboardSha256(listOf(previous, event.time, event.key, event.category, event.previous ?: "", event.current).joinToString("|"))
         if (expected != event.hash) return false
         previous = event.hash
     }
