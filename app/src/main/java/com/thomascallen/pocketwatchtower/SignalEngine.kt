@@ -1,9 +1,7 @@
 package com.thomascallen.pocketwatchtower
 
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
-import kotlin.math.abs
 
 internal data class CorrelationSignal(
     val level: String,
@@ -39,57 +37,50 @@ internal fun detectSignals(events: List<Event>, windowMinutes: Long = 5): List<C
         if (text.contains("vpn") || text.contains("network")) families += "network"
         if (text.contains("process")) families += "process"
         if (text.contains("app") || text.contains("package") || text.contains("install")) families += "application"
-        if (text.contains("notification")) families += "notification"
         if (text.contains("device admin") || text.contains("device owner")) families += "authority"
         if (text.contains("adb") || text.contains("developer")) families += "developer"
-        if (group.any { it.category.equals("Battery", true) }) families += "battery"
-        if (group.any { it.category.equals("Memory", true) }) families += "memory"
-        if (group.any { it.category.equals("Storage", true) }) families += "storage"
 
+        // Battery, memory, storage, notification, uptime, and similar telemetry are
+        // evidence, but are never attention signals by themselves or in combination.
+        val highAttentionFamilies = families.intersect(
+            setOf("access", "overlay", "network", "process", "application", "authority", "developer")
+        )
         val packageInventoryChanged = group.any { it.key.equals("Package inventory SHA-256", true) }
-        val batterySignificant = group.any { event ->
-            if (!event.category.equals("Battery", true)) return@any false
-            val current = numeric(event.current)
-            val previous = numeric(event.previous)
-            current != null && previous != null && abs(current - previous) >= 5.0
-        }
-        val qualifying = families.size >= 2 || (families.contains("application") && families.contains("process")) || (packageInventoryChanged && batterySignificant)
+
+        // A signal requires at least one high-attention evidence family. Ordinary
+        // device telemetry cannot manufacture an attention event anymore.
+        val qualifying = highAttentionFamilies.isNotEmpty() || packageInventoryChanged
         if (!qualifying) continue
+
         val signature = group.map { it.key + "=" + it.current }.sorted().joinToString("|")
         if (results.any { it.observations.map { e -> e.key + "=" + e.current }.sorted().joinToString("|") == signature }) continue
 
-        val level = when {
-            families.size >= 4 -> "CORRELATED SIGNAL — HIGH ATTENTION"
-            families.size >= 3 -> "CORRELATED SIGNAL — ATTENTION"
-            else -> "CORRELATED SIGNAL — REVIEW"
+        val level = "HIGH ATTENTION"
+        val confidence = if (highAttentionFamilies.size >= 2) {
+            "Moderate — multiple high-interest observable areas changed in one window."
+        } else {
+            "Preliminary — a high-interest observable state changed; the cause is unresolved."
         }
-        val confidence = when {
-            families.size >= 4 -> "Moderate — multiple independent observable areas changed in one window."
-            families.size >= 3 -> "Moderate — several related observable areas changed in one window."
-            else -> "Preliminary — timing and evidence-area diversity justify review, but the cause is unresolved."
-        }
-        val reasons = mutableListOf<String>(
-            "The owner intentionally installed or configured an application.",
-            "A legitimate accessibility, automation, security, enterprise, or networking tool changed configuration.",
-            "An application or Android update changed capabilities or runtime behavior."
-        )
-        if (families.contains("authority") || families.contains("developer")) reasons += "A device-management or developer configuration was changed."
-        if (packageInventoryChanged && batterySignificant) reasons += "An application/package inventory change occurred near a significant battery-state change; the relationship is temporal only."
-        reasons += "An unexpected configuration or application change occurred; the observed data alone cannot establish the cause."
+        val reasons = mutableListOf<String>()
+        if (families.contains("application") || packageInventoryChanged) reasons += "An application/package was installed, removed, updated, or otherwise changed in the visible inventory."
+        if (families.contains("access")) reasons += "An accessibility or privileged access state changed."
+        if (families.contains("overlay")) reasons += "An overlay/draw-over-other-apps capability was observed in the change window."
+        if (families.contains("network")) reasons += "A network or VPN-related state changed."
+        if (families.contains("authority")) reasons += "A device-admin or device-owner authority state changed."
+        if (families.contains("developer")) reasons += "A developer/ADB-related state changed."
+        if (families.contains("process")) reasons += "A process-related observable state changed."
+        reasons += "The observed state changed for another reason not exposed by Watchtower; additional evidence is required."
 
-        val areas = families.map { it.replaceFirstChar { c -> c.uppercase() } }
-        val title = if (packageInventoryChanged && batterySignificant) {
-            "Package inventory changed near a significant battery-state change"
-        } else {
-            "Several related device changes occurred close together"
+        val areas = highAttentionFamilies.map { it.replaceFirstChar { c -> c.uppercase() } }.toMutableList()
+        if (packageInventoryChanged && !areas.contains("Application")) areas += "Application"
+        val title = when {
+            packageInventoryChanged -> "Application/package state changed"
+            highAttentionFamilies.size >= 2 -> "Multiple high-interest device states changed close together"
+            else -> "High-interest device state changed"
         }
-        val whatHappened = "${group.size} observable change(s) occurred between ${group.first().time} and ${group.last().time}, spanning ${areas.size} evidence area(s): ${areas.joinToString(", ")}. The engine can establish the timing and recorded values; it cannot establish intent from these observations alone."
-        val why = if (packageInventoryChanged && batterySignificant) {
-            "The package inventory hash changed in the same review window as a significant battery-state change. That combination is worth examining because the package hash tells us that the visible application set/version state changed, while the battery telemetry shows a concurrent device-state change. It does not tell us that the two events caused one another."
-        } else {
-            "The cluster is more worthy of review than any single observation because multiple evidence areas changed within the same window. This increases review value, not proof of causation or wrongdoing."
-        }
-        val strengthen = "Identify the affected application or service and compare installation/update time, granted special access, accessibility state, overlay capability, VPN/network state, process visibility, device-management state, battery state, and owner actions during this window."
+        val whatHappened = "${group.size} observable change(s) occurred between ${group.first().time} and ${group.last().time}. High-interest evidence areas involved: ${areas.distinct().joinToString(", ")}. Ordinary telemetry such as battery, memory, storage, and uptime is not treated as an attention signal."
+        val why = "This event is surfaced because a high-interest device state changed. Timing and correlation increase review value, but they do not establish intent, causation, compromise, or wrongdoing."
+        val strengthen = "Identify the affected application or service and compare installation/update time, granted special access, accessibility state, overlay capability, VPN/network state, process visibility, device-management state, and owner actions during this window."
         val notProve = "This signal does not prove spying, compromise, unauthorized control, malicious intent, or that one observed change caused another."
         val limitation = "Watchtower can correlate only observations Android exposes to it. Android may restrict process, package, permission, network, and provider-side visibility."
 
@@ -98,7 +89,7 @@ internal fun detectSignals(events: List<Event>, windowMinutes: Long = 5): List<C
             title = title,
             window = "${group.first().time} → ${group.last().time}",
             observations = group,
-            evidenceAreas = areas,
+            evidenceAreas = areas.distinct(),
             confidence = confidence,
             whatHappened = whatHappened,
             whyItMatters = why,
@@ -109,11 +100,4 @@ internal fun detectSignals(events: List<Event>, windowMinutes: Long = 5): List<C
         )
     }
     return results.takeLast(8).reversed()
-}
-
-private fun numeric(value: String?): Double? {
-    if (value == null) return null
-    val normalized = value.replace(",", "")
-    val number = Regex("[-+]?\\d+(?:\\.\\d+)?").find(normalized)?.value ?: return null
-    return number.toDoubleOrNull()
 }
