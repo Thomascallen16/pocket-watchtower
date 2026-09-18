@@ -67,7 +67,7 @@ jobs:
           name: pocket-watchtower-v${{ steps.version.outputs.version }}-release
           path: app/build/outputs/apk/release/Pocket-Watchtower-v${{ steps.version.outputs.version }}.apk
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Publish GitHub Release
         if: github.ref == 'refs/heads/main'
