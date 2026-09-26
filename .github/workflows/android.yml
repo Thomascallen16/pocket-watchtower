@@ -1,10 +1,12 @@
 name: Android validation
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
+
+concurrency:
+  group: pocket-watchtower-android-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -30,7 +32,7 @@ jobs:
       - name: Validate release version
         shell: bash
         run: |
-          VERSION="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"\([^"]*\)"[[:space:]]*$/\1/p' app/build.gradle.kts | head -n 1)"
+          VERSION="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*=\s*"\([^"]*\)"[[:space:]]*$/\1/p' app/build.gradle.kts | head -n 1)"
           test -n "$VERSION"
           echo "Validating Pocket Watchtower v$VERSION"
 
